@@ -1,4 +1,5 @@
 from typing import Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -25,7 +26,7 @@ class CreateEnsSubnameRequest(BaseModel):
 class UpdateEnsRecordsRequest(BaseModel):
     name: str
     address: Optional[str] = None
-    texts: Dict[str, str] = {}
+    texts: Dict[str, str] = Field(default_factory=dict)
 
 
 class UniswapQuoteRequest(BaseModel):
@@ -52,7 +53,7 @@ class SafeBuildTxRequest(BaseModel):
     to: str
     data: str
     value: str = "0"
-    operation: int = 0  # 0 = CALL, 1 = DELEGATECALL
+    operation: int = 0
 
 
 class ExecuteSafeTxRequest(BaseModel):
@@ -60,13 +61,4 @@ class ExecuteSafeTxRequest(BaseModel):
     to: str
     data: str
     value: str = "0"
-    operation: int = 0
-
-class SetReverseEnsRequest(BaseModel):
-    address: str
-    name: str
-
-
-class PrepareSetReverseEnsRequest(SetReverseEnsRequest):
-    safe_address: str
     operation: int = 0

@@ -2,7 +2,10 @@ from typing import Any, Dict
 
 import requests
 
-from app.config import settings
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
 
 
 class UniswapService:
@@ -27,9 +30,7 @@ class UniswapService:
         amount_in: str,
         slippage_bps: int = 50,
     ) -> Dict[str, Any]:
-        # Adjust to the exact endpoint/path from your Uniswap setup
         url = f"{self.base_url}/v1/quote"
-
         payload = {
             "type": "EXACT_INPUT",
             "tokenInChainId": chain_id,
@@ -55,9 +56,7 @@ class UniswapService:
         amount_in: str,
         slippage_bps: int = 50,
     ) -> Dict[str, Any]:
-        # Adjust to the exact endpoint/path from your Uniswap setup
         url = f"{self.base_url}/v1/swap"
-
         payload = {
             "type": "EXACT_INPUT",
             "tokenInChainId": chain_id,
