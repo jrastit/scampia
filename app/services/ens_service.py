@@ -3,9 +3,11 @@ from typing import Dict, Optional
 from eth_account import Account
 from eth_utils import keccak, to_checksum_address
 from web3 import Web3
-from web3.contract import Contract
 
-from app.config import settings
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
 
 
 ENS_REGISTRY_ABI = [
@@ -72,6 +74,26 @@ PUBLIC_RESOLVER_ABI = [
     },
 ]
 
+REVERSE_REGISTRAR_ABI = [
+    {
+        "inputs": [
+            {"internalType": "address", "name": "addr", "type": "address"},
+            {"internalType": "string", "name": "name", "type": "string"},
+        ],
+        "name": "setNameForAddr",
+        "outputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
+        "inputs": [{"internalType": "string", "name": "name", "type": "string"}],
+        "name": "setName",
+        "outputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+]
+
 
 def labelhash(label: str) -> bytes:
     return keccak(text=label)
@@ -89,13 +111,24 @@ def namehash(name: str) -> bytes:
 class ENSService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(settings.rpc_url))
-        self.account = Account.from_key(settings.backend_private_key)
-        self.registry: Contract = self.w3.eth.contract(
+        self.account = Account.from_key(settings.backend_private_key) if settings.backend_private_key else None
+        self.registry = self.w3.eth.contract(
             address=to_checksum_address(settings.ens_registry_address),
-            abi=ENS_REGISTRY_ABI
+            abi=ENS_REGISTRY_ABI,
         )
+        self.reverse_registrar = None
+        if settings.ens_reverse_registrar_address:
+            self.reverse_registrar = self.w3.eth.contract(
+                address=to_checksum_address(settings.ens_reverse_registrar_address),
+                abi=REVERSE_REGISTRAR_ABI,
+            )
+
+    def _require_signer(self) -> None:
+        if not self.account:
+            raise ValueError("BACKEND_PRIVATE_KEY is required for ENS write operations")
 
     def _send_tx(self, tx: dict) -> str:
+        self._require_signer()
         tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
         tx["chainId"] = settings.chain_id
         tx["gasPrice"] = self.w3.eth.gas_price
@@ -106,7 +139,7 @@ class ENSService:
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         return self.w3.to_hex(tx_hash)
 
-    def create_subname(
+    def build_create_subname_tx(
         self,
         parent_name: str,
         label: str,
@@ -115,15 +148,41 @@ class ENSService:
         ttl: int = 0,
     ) -> dict:
         parent_node = namehash(parent_name)
+        data = self.registry.encode_abi(
+            "setSubnodeRecord",
+            args=[
+                parent_node,
+                labelhash(label),
+                to_checksum_address(owner_address),
+                to_checksum_address(resolver_address),
+                ttl,
+            ],
+        )
+        full_name = f"{label}.{parent_name}"
+        return {
+            "to": self.registry.address,
+            "data": data,
+            "value": "0",
+            "name": full_name,
+            "node": self.w3.to_hex(namehash(full_name)),
+        }
+
+    def create_subname(
+        self,
+        parent_name: str,
+        label: str,
+        owner_address: str,
+        resolver_address: str,
+        ttl: int = 0,
+    ) -> dict:
+        self._require_signer()
         tx = self.registry.functions.setSubnodeRecord(
-            parent_node,
+            namehash(parent_name),
             labelhash(label),
             to_checksum_address(owner_address),
             to_checksum_address(resolver_address),
             ttl,
-        ).build_transaction({
-            "from": self.account.address,
-        })
+        ).build_transaction({"from": self.account.address})
         tx_hash = self._send_tx(tx)
 
         full_name = f"{label}.{parent_name}"
@@ -133,37 +192,71 @@ class ENSService:
             "node": self.w3.to_hex(namehash(full_name)),
         }
 
+    def build_set_reverse_name_tx(self, target_address: str, name: str) -> dict:
+        if not self.reverse_registrar:
+            raise ValueError("ENS_REVERSE_REGISTRAR_ADDRESS is required for reverse ENS operations")
+
+        data = self.reverse_registrar.encode_abi(
+            "setNameForAddr",
+            args=[to_checksum_address(target_address), name],
+        )
+        return {
+            "to": self.reverse_registrar.address,
+            "data": data,
+            "value": "0",
+            "address": to_checksum_address(target_address),
+            "name": name,
+        }
+
+    def set_reverse_name(self, target_address: str, name: str) -> dict:
+        self._require_signer()
+        if not self.reverse_registrar:
+            raise ValueError("ENS_REVERSE_REGISTRAR_ADDRESS is required for reverse ENS operations")
+
+        tx = self.reverse_registrar.functions.setNameForAddr(
+            to_checksum_address(target_address),
+            name,
+        ).build_transaction({"from": self.account.address})
+        tx_hash = self._send_tx(tx)
+        return {
+            "tx_hash": tx_hash,
+            "address": to_checksum_address(target_address),
+            "name": name,
+        }
+
     def get_resolver(self, name: str) -> str:
         node = namehash(name)
         return self.registry.functions.resolver(node).call()
 
     def set_addr(self, name: str, address: str, resolver_address: Optional[str] = None) -> dict:
+        self._require_signer()
         node = namehash(name)
         resolver = resolver_address or self.get_resolver(name)
         resolver_contract = self.w3.eth.contract(
             address=to_checksum_address(resolver),
-            abi=PUBLIC_RESOLVER_ABI
+            abi=PUBLIC_RESOLVER_ABI,
         )
         tx = resolver_contract.functions.setAddr(
             node,
-            to_checksum_address(address)
+            to_checksum_address(address),
         ).build_transaction({"from": self.account.address})
         tx_hash = self._send_tx(tx)
         return {"tx_hash": tx_hash, "name": name, "address": to_checksum_address(address)}
 
     def set_text_records(self, name: str, texts: Dict[str, str], resolver_address: Optional[str] = None) -> dict:
+        self._require_signer()
         node = namehash(name)
         resolver = resolver_address or self.get_resolver(name)
         resolver_contract = self.w3.eth.contract(
             address=to_checksum_address(resolver),
-            abi=PUBLIC_RESOLVER_ABI
+            abi=PUBLIC_RESOLVER_ABI,
         )
 
         tx_hashes = []
         for key, value in texts.items():
-            tx = resolver_contract.functions.setText(
-                node, key, value
-            ).build_transaction({"from": self.account.address})
+            tx = resolver_contract.functions.setText(node, key, value).build_transaction(
+                {"from": self.account.address}
+            )
             tx_hashes.append(self._send_tx(tx))
 
         return {"name": name, "tx_hashes": tx_hashes, "texts": texts}
@@ -173,12 +266,12 @@ class ENSService:
         resolver = self.get_resolver(name)
         resolver_contract = self.w3.eth.contract(
             address=to_checksum_address(resolver),
-            abi=PUBLIC_RESOLVER_ABI
+            abi=PUBLIC_RESOLVER_ABI,
         )
         addr = resolver_contract.functions.addr(node).call()
 
         texts = {}
-        for key in (text_keys or []):
+        for key in text_keys or []:
             try:
                 texts[key] = resolver_contract.functions.text(node, key).call()
             except Exception:
@@ -189,4 +282,6 @@ class ENSService:
             "resolver": resolver,
             "address": addr,
             "texts": texts,
+            "network": settings.network,
+            "chainId": settings.chain_id,
         }

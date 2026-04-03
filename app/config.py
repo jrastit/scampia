@@ -2,20 +2,44 @@
 Configuration.
 
 Shared config  → settings.yaml (committed in the repo)
-Secrets        → .env          (never committed, only BACKEND_PRIVATE_KEY)
-
-settings.yaml values are loaded first, then .env secrets are layered on top.
+Secrets        → .env          (never committed)
+Network select → NETWORK env var (default: ethereum-sepolia)
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict
 
 import yaml
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── Multi-network support ──
+NETWORKS: Dict[str, Dict[str, str | int]] = {
+    "ethereum-mainnet": {
+        "rpc_url": "https://ethereum-rpc.publicnode.com",
+        "chain_id": 1,
+        "safe_tx_service_base": "https://safe-transaction-mainnet.safe.global",
+    },
+    "ethereum-sepolia": {
+        "rpc_url": "https://ethereum-sepolia-rpc.publicnode.com",
+        "chain_id": 11155111,
+        "safe_tx_service_base": "https://safe-transaction-sepolia.safe.global",
+    },
+}
+
+
+def _selected_network() -> str:
+    network = os.getenv("NETWORK", "ethereum-sepolia").lower()
+    if network not in NETWORKS:
+        supported = ", ".join(sorted(NETWORKS))
+        raise ValueError(f"Unsupported NETWORK '{network}'. Supported: {supported}")
+    return network
+
+
+# ── Load settings.yaml (optional) ──
 _yaml_path = Path(__file__).resolve().parent.parent / "settings.yaml"
 _cfg: dict = {}
 if _yaml_path.exists():
@@ -25,7 +49,6 @@ if _yaml_path.exists():
 
 def _get(yaml_keys: list[str], env_key: str = "", default=""):
     """Read from YAML first, then env var, then default."""
-    # Walk into nested YAML
     val = _cfg
     for k in yaml_keys:
         if isinstance(val, dict):
@@ -43,18 +66,18 @@ def _get(yaml_keys: list[str], env_key: str = "", default=""):
 @dataclass
 class Settings:
     # ── App ──
-    app_name: str = _get(["app", "name"], "APP_NAME", "Scampia API")
+    app_name: str = os.getenv("APP_NAME", "Scampia API")
+    network: str = _selected_network()
 
-    # ── Chain ──
-    chain_id: int = int(_get(["chain", "id"], "CHAIN_ID", "11155111"))
-    rpc_url: str = _get(["chain", "rpc_url"], "RPC_URL", "https://rpc.sepolia.org")
+    # ── Chain (from NETWORKS + env override) ──
+    rpc_url: str = os.getenv("RPC_URL", str(NETWORKS[network]["rpc_url"]))
+    chain_id: int = int(os.getenv("CHAIN_ID", str(NETWORKS[network]["chain_id"])))
 
     # ── Safe ──
     safe_address: str = _get(["safe", "address"], "SAFE_ADDRESS", "")
-    safe_tx_service_base: str = _get(
-        ["safe", "tx_service"],
+    safe_tx_service_base: str = os.getenv(
         "SAFE_TX_SERVICE_BASE",
-        "https://safe-transaction-sepolia.safe.global",
+        str(NETWORKS[network]["safe_tx_service_base"]),
     )
     safe_api_key: str = os.getenv("SAFE_API_KEY", "")
 
@@ -70,8 +93,8 @@ class Settings:
 
     # ── Uniswap ──
     uniswap_api_key: str = os.getenv("UNISWAP_API_KEY", "")
-    uniswap_api_base: str = _get(
-        ["uniswap", "api_base"], "UNISWAP_API_BASE",
+    uniswap_api_base: str = os.getenv(
+        "UNISWAP_API_BASE",
         "https://trade-api.gateway.uniswap.org",
     )
     uniswap_swap_router: str = _get(
@@ -88,10 +111,11 @@ class Settings:
     )
 
     # ── ENS ──
-    ens_registry_address: str = _get(
-        ["ens", "registry"], "ENS_REGISTRY_ADDRESS",
+    ens_registry_address: str = os.getenv(
+        "ENS_REGISTRY_ADDRESS",
         "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e",
     )
+    ens_reverse_registrar_address: str = os.getenv("ENS_REVERSE_REGISTRAR_ADDRESS", "")
     ens_public_resolver_address: str = os.getenv("ENS_PUBLIC_RESOLVER_ADDRESS", "")
     ens_parent_name: str = _get(
         ["ens", "parent_name"], "ENS_PARENT_NAME", "openclaw.eth",
@@ -103,10 +127,16 @@ class Settings:
     # ── Policy defaults ──
     @property
     def default_allowed_tokens_in(self) -> list[str]:
+        raw = os.getenv("TRADE_ALLOWED_TOKENS_IN", "")
+        if raw:
+            return [t.strip() for t in raw.split(",") if t.strip()]
         return _get(["policy", "allowed_tokens_in"], default=[]) or [self.usdc_address]
 
     @property
     def default_allowed_tokens_out(self) -> list[str]:
+        raw = os.getenv("TRADE_ALLOWED_TOKENS_OUT", "")
+        if raw:
+            return [t.strip() for t in raw.split(",") if t.strip()]
         return _get(["policy", "allowed_tokens_out"], default=[]) or [self.weth_address]
 
     @property
@@ -115,7 +145,10 @@ class Settings:
 
     @property
     def default_max_input_per_tx(self) -> int:
-        return int(_get(["policy", "max_input_per_tx"], default=1_000_000_000))
+        return int(os.getenv(
+            "TRADE_MAX_INPUT_PER_TX",
+            str(_get(["policy", "max_input_per_tx"], default=1_000_000_000)),
+        ))
 
 
 settings = Settings()

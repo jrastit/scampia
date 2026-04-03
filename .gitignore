@@ -6,8 +6,6 @@
 *.pem
 *.secret
 __pycache__/
-*.py[cod]
-*.egg-info/
 dist/
 build/
 venv/
@@ -18,3 +16,5 @@ venv/
 *.swp
 *.swo
 .DS_Store
+app/.gitignore
+*.pyc

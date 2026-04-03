@@ -49,3 +49,57 @@ The **Safe Layer** acts as the security and control middleware between the AI ag
 - Slippage within bounds
 - Deadline valid
 - Target contract matches whitelist
+
+### Example CURL API CALLS (TO DELETE)
+#### Import a Safe
+curl -X POST http://localhost:8000/v1/safes/import \
+  -H "Content-Type: application/json" \
+  -d '{
+    "safe_address": "0x1234567890123456789012345678901234567890",
+    "chain_id": 8453
+  }'
+#### Create ENS subname
+curl -X POST http://localhost:8000/v1/ens/subnames \
+  -H "Content-Type: application/json" \
+  -d '{
+    "parent_name": "openclaw.eth",
+    "label": "alice-trader",
+    "safe_address": "0x1234567890123456789012345678901234567890"
+  }'
+#### Set ENS records
+curl -X PUT http://localhost:8000/v1/ens/records \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "alice-trader.openclaw.eth",
+    "address": "0x1234567890123456789012345678901234567890",
+    "texts": {
+      "agent:type": "trader",
+      "agent:capabilities": "quote,swap",
+      "agent:api": "https://api.openclaw.xyz/v1/agents/alice-trader",
+      "agent:safe": "0x1234567890123456789012345678901234567890"
+    }
+  }'
+  #### GET QUOTE (Before setting transaction)
+  curl -X POST http://localhost:8000/v1/trades/quote \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain_id": 8453,
+    "safe_address": "0x1234567890123456789012345678901234567890",
+    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
+    "token_out": "0x4200000000000000000000000000000000000006",
+    "amount_in": "1000000",
+    "slippage_bps": 50
+  }'
+#### Build Safe-ready trade
+curl -X POST http://localhost:8000/v1/trades/prepare-safe-tx \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain_id": 8453,
+    "safe_address": "0x1234567890123456789012345678901234567890",
+    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
+    "token_out": "0x4200000000000000000000000000000000000006",
+    "amount_in": "1000000",
+    "slippage_bps": 50
+  }'
+
+
