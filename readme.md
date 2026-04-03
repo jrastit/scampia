@@ -50,7 +50,7 @@ The **Safe Layer** acts as the security and control middleware between the AI ag
 - Deadline valid
 - Target contract matches whitelist
 
-### Example CALLS
+### Example CURL API CALLS (TO DELETE)
 #### Import a Safe
 curl -X POST http://localhost:8000/v1/safes/import \
   -H "Content-Type: application/json" \
