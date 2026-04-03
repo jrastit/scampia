@@ -5,3 +5,4 @@ requests
 web3
 eth-account
 safe-eth-py
+dotenv
