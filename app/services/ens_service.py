@@ -72,6 +72,27 @@ PUBLIC_RESOLVER_ABI = [
     },
 ]
 
+REVERSE_REGISTRAR_ABI = [
+    {
+        "inputs": [
+            {"internalType": "address", "name": "addr", "type": "address"},
+            {"internalType": "string", "name": "name", "type": "string"},
+        ],
+        "name": "setNameForAddr",
+        "outputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+    {
+        "inputs": [
+            {"internalType": "string", "name": "name", "type": "string"},
+        ],
+        "name": "setName",
+        "outputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+        "stateMutability": "nonpayable",
+        "type": "function",
+    },
+]
 
 def labelhash(label: str) -> bytes:
     return keccak(text=label)
@@ -90,11 +111,27 @@ class ENSService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(settings.rpc_url))
         self.account = Account.from_key(settings.backend_private_key)
-        self.registry: Contract = self.w3.eth.contract(
+        self.registry = self.w3.eth.contract(
             address=to_checksum_address(settings.ens_registry_address),
             abi=ENS_REGISTRY_ABI
         )
-
+        self.reverse_registrar = self.w3.eth.contract(
+            address=to_checksum_address(settings.ens_reverse_registrar_address),
+            abi=REVERSE_REGISTRAR_ABI
+        )
+    def set_reverse_name(self, target_address: str, name: str) -> dict:
+        tx = self.reverse_registrar.functions.setNameForAddr(
+            to_checksum_address(target_address),
+            name,
+        ).build_transaction({
+            "from": self.account.address,
+        })
+        tx_hash = self._send_tx(tx)
+        return {
+            "tx_hash": tx_hash,
+            "address": to_checksum_address(target_address),
+            "name": name,
+        }
     def _send_tx(self, tx: dict) -> str:
         tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
         tx["chainId"] = settings.chain_id

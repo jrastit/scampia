@@ -25,6 +25,11 @@ class Settings:
         "ENS_REGISTRY_ADDRESS",
         "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
     )
+    
+    ens_reverse_registrar_address: str = os.getenv(
+    "ENS_REVERSE_REGISTRAR_ADDRESS",
+    "0x0000000000D8e504002cC26E3Ec46D81971C1664"  # Base example, not universal
+)
     ens_public_resolver_address: str = os.getenv("ENS_PUBLIC_RESOLVER_ADDRESS", "")
     ens_parent_name: str = os.getenv("ENS_PARENT_NAME", "openclaw.eth")
 
