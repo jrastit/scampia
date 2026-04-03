@@ -61,3 +61,12 @@ class ExecuteSafeTxRequest(BaseModel):
     data: str
     value: str = "0"
     operation: int = 0
+
+class SetReverseEnsRequest(BaseModel):
+    address: str
+    name: str
+
+
+class PrepareSetReverseEnsRequest(SetReverseEnsRequest):
+    safe_address: str
+    operation: int = 0
