@@ -1,9 +1,15 @@
 from typing import Any, Dict, Iterable, Optional
 
-from app.services.policy_service import PolicyService
-from app.services.safe_service import SafeService
-from app.services.simulation_service import SimulationService
-from app.services.uniswap_service import UniswapService
+try:
+    from app.services.policy_service import PolicyService
+    from app.services.safe_service import SafeService
+    from app.services.simulation_service import SimulationService
+    from app.services.uniswap_service import UniswapService
+except ImportError:
+    from policy_service import PolicyService
+    from safe_service import SafeService
+    from simulation_service import SimulationService
+    from uniswap_service import UniswapService
 
 
 class TradeService:
@@ -31,11 +37,7 @@ class TradeService:
         if data is None:
             raise ValueError("swap response missing calldata")
 
-        return {
-            "to": to,
-            "data": data,
-            "value": value,
-        }
+        return {"to": to, "data": data, "value": value}
 
     def quote_trade(
         self,
@@ -69,7 +71,6 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or safe_address
-
         self.policy_service.validate_trade(
             safe_address=safe_address,
             recipient=recipient,
@@ -112,7 +113,6 @@ class TradeService:
         operation: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or safe_address
-
         self.policy_service.validate_trade(
             safe_address=safe_address,
             recipient=recipient,
@@ -133,13 +133,12 @@ class TradeService:
             slippage_bps=slippage_bps,
         )
         tx = self._normalize_swap_tx(swap)
-        tx_value_int = int(tx["value"])
 
         simulation = self.simulation_service.simulate_call(
             from_address=safe_address,
             to=tx["to"],
             data=tx["data"],
-            value=tx_value_int,
+            value=int(tx["value"]),
         )
 
         safe_tx = self.safe_service.build_safe_tx(

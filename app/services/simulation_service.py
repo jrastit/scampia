@@ -1,8 +1,12 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
 from web3 import Web3
 from web3.exceptions import ContractLogicError
 
-from app.config import settings
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
 
 
 class SimulationError(Exception):
@@ -35,6 +39,6 @@ class SimulationService:
                 "returnData": result.hex(),
             }
         except ContractLogicError as e:
-            raise SimulationError(f"simulation reverted: {str(e)}")
+            raise SimulationError(f"simulation reverted: {str(e)}") from e
         except Exception as e:
-            raise SimulationError(f"simulation failed: {str(e)}")
+            raise SimulationError(f"simulation failed: {str(e)}") from e
