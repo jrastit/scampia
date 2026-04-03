@@ -1,0 +1,158 @@
+from typing import Any, Dict, Iterable, Optional
+
+from app.services.policy_service import PolicyService
+from app.services.safe_service import SafeService
+from app.services.simulation_service import SimulationService
+from app.services.uniswap_service import UniswapService
+
+
+class TradeService:
+    def __init__(
+        self,
+        uniswap_service: UniswapService,
+        policy_service: PolicyService,
+        simulation_service: SimulationService,
+        safe_service: SafeService,
+    ):
+        self.uniswap_service = uniswap_service
+        self.policy_service = policy_service
+        self.simulation_service = simulation_service
+        self.safe_service = safe_service
+
+    @staticmethod
+    def _normalize_swap_tx(swap: Dict[str, Any]) -> Dict[str, str]:
+        tx = swap.get("tx", {}) if isinstance(swap.get("tx"), dict) else {}
+        to = swap.get("to") or tx.get("to")
+        data = swap.get("data") or tx.get("data")
+        value = str(swap.get("value") or tx.get("value") or "0")
+
+        if not to:
+            raise ValueError("swap response missing destination address")
+        if data is None:
+            raise ValueError("swap response missing calldata")
+
+        return {
+            "to": to,
+            "data": data,
+            "value": value,
+        }
+
+    def quote_trade(
+        self,
+        chain_id: int,
+        safe_address: str,
+        token_in: str,
+        token_out: str,
+        amount_in: str,
+        slippage_bps: int = 50,
+    ) -> Dict[str, Any]:
+        return self.uniswap_service.get_quote(
+            chain_id=chain_id,
+            wallet_address=safe_address,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+        )
+
+    def build_trade(
+        self,
+        chain_id: int,
+        safe_address: str,
+        token_in: str,
+        token_out: str,
+        amount_in: str,
+        slippage_bps: int = 50,
+        recipient: Optional[str] = None,
+        allowed_tokens_in: Optional[Iterable[str]] = None,
+        allowed_tokens_out: Optional[Iterable[str]] = None,
+        max_input_per_tx: int = 0,
+    ) -> Dict[str, Any]:
+        recipient = recipient or safe_address
+
+        self.policy_service.validate_trade(
+            safe_address=safe_address,
+            recipient=recipient,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=int(amount_in),
+            allowed_tokens_in=allowed_tokens_in or [],
+            allowed_tokens_out=allowed_tokens_out or [],
+            max_input_per_tx=max_input_per_tx,
+        )
+
+        swap = self.uniswap_service.build_swap(
+            chain_id=chain_id,
+            wallet_address=safe_address,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+        )
+        tx = self._normalize_swap_tx(swap)
+
+        return {
+            "policyCheck": {"ok": True},
+            "quoteOrSwapResponse": swap,
+            "tx": tx,
+        }
+
+    def prepare_safe_trade(
+        self,
+        chain_id: int,
+        safe_address: str,
+        token_in: str,
+        token_out: str,
+        amount_in: str,
+        slippage_bps: int = 50,
+        recipient: Optional[str] = None,
+        allowed_tokens_in: Optional[Iterable[str]] = None,
+        allowed_tokens_out: Optional[Iterable[str]] = None,
+        max_input_per_tx: int = 0,
+        operation: int = 0,
+    ) -> Dict[str, Any]:
+        recipient = recipient or safe_address
+
+        self.policy_service.validate_trade(
+            safe_address=safe_address,
+            recipient=recipient,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=int(amount_in),
+            allowed_tokens_in=allowed_tokens_in or [],
+            allowed_tokens_out=allowed_tokens_out or [],
+            max_input_per_tx=max_input_per_tx,
+        )
+
+        swap = self.uniswap_service.build_swap(
+            chain_id=chain_id,
+            wallet_address=safe_address,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+        )
+        tx = self._normalize_swap_tx(swap)
+        tx_value_int = int(tx["value"])
+
+        simulation = self.simulation_service.simulate_call(
+            from_address=safe_address,
+            to=tx["to"],
+            data=tx["data"],
+            value=tx_value_int,
+        )
+
+        safe_tx = self.safe_service.build_safe_tx(
+            safe_address=safe_address,
+            to=tx["to"],
+            data=tx["data"],
+            value=tx["value"],
+            operation=operation,
+        )
+
+        return {
+            "policyCheck": {"ok": True},
+            "simulation": simulation,
+            "safeTx": safe_tx,
+            "rawSwap": swap,
+        }
