@@ -16,7 +16,7 @@ from app.services.uniswap_service import UniswapService
 from app.config import settings
 
 
-app = FastAPI(title="OpenClaw Skill API", version="0.1.0")
+app = FastAPI(title="Scampia API", version="0.1.0")
 
 ens_service = ENSService()
 safe_service = SafeService()
