@@ -13,7 +13,11 @@ from app.services.ens_service import ENSService
 from app.services.policy_service import PolicyService, PolicyViolation
 from app.services.safe_service import SafeService
 from app.services.uniswap_service import UniswapService
+from app.services.simulation_service import SimulationService, SimulationError
+from pydantic import BaseModel
+
 from app.config import settings
+
 
 
 app = FastAPI(title="Scampia API", version="0.1.0")
@@ -22,7 +26,11 @@ ens_service = ENSService()
 safe_service = SafeService()
 uniswap_service = UniswapService()
 policy_service = PolicyService()
+simulation_service = SimulationService()
 
+class SetReverseEnsRequest(BaseModel):
+    address: str
+    name: str
 
 @app.get("/health")
 def health():
@@ -56,7 +64,16 @@ def build_safe_tx(req: SafeBuildTxRequest):
         operation=req.operation,
     )
 
-
+@app.post("/v1/ens/reverse")
+def set_reverse_ens(req: SetReverseEnsRequest):
+    try:
+        return ens_service.set_reverse_name(
+            target_address=req.address,
+            name=req.name,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+        
 @app.post("/v1/safes/execute-direct")
 def execute_direct(req: ExecuteSafeTxRequest):
     # Example only. This is not Safe multisig execution.
@@ -223,8 +240,15 @@ def prepare_safe_trade(req: BuildTradeRequest):
             operation=0,
         )
 
-        return {"safeTx": safe_tx, "rawSwap": swap}
+        return {
+            "policyCheck": {"ok": True},
+            "simulation": simulation,
+            "safeTx": safe_tx,
+            "rawSwap": swap,
+        }
     except PolicyViolation as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except SimulationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
