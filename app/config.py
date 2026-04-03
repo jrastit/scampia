@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Settings:
-    app_name: str = os.getenv("APP_NAME", "openclaw-skill-api")
+    app_name: str = os.getenv("APP_NAME", "Scampia API")
     rpc_url: str = os.getenv("RPC_URL", "https://mainnet.base.org")
     chain_id: int = int(os.getenv("CHAIN_ID", "8453"))
 
