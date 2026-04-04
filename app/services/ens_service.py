@@ -175,6 +175,11 @@ class ENSService:
 
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+        if receipt.status != 1:
+            raise ValueError(f"ENS transaction reverted: {self.w3.to_hex(tx_hash)}")
+
         return self.w3.to_hex(tx_hash)
 
     def resolve_full_name(self, label: Optional[str], parent_name: Optional[str] = None) -> str:
