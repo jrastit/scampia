@@ -50,15 +50,31 @@ The **Safe Layer** acts as the security and control middleware between the AI ag
 - Deadline valid
 - Target contract matches whitelist
 
-### Example CURL API CALLS (TO DELETE)
-#### Import a Safe
+## Uniswap integration notes
+
+- Uniswap Trading API base should be set to `https://trade-api.gateway.uniswap.org` (with or without `/v1` in env; the service normalizes it).
+- Quotes are requested through `/quote` and include routing plus optional `permitData`.
+- Routing is handled automatically:
+  - `CLASSIC`, `WRAP`, `UNWRAP`, `BRIDGE`, `CHAINED` -> swap flow
+  - `DUTCH_V2`, `DUTCH_V3`, `PRIORITY`, `DUTCH_LIMIT`, `LIMIT_ORDER` -> order flow
+- If `permitData` is returned by quote, the client must sign EIP-712 and pass the signature as `permit_signature`.
+- `prepare-safe-tx` is only for swap-compatible routes (not UniswapX gasless order routes).
+- Uniswap API requests retry on HTTP 429 using exponential backoff.
+
+## API examples
+
+### Import a Safe
+```bash
 curl -X POST http://localhost:8000/v1/safes/import \
   -H "Content-Type: application/json" \
   -d '{
     "safe_address": "0x1234567890123456789012345678901234567890",
     "chain_id": 8453
   }'
-#### Create ENS subname
+```
+
+### Create ENS subname
+```bash
 curl -X POST http://localhost:8000/v1/ens/subnames \
   -H "Content-Type: application/json" \
   -d '{
@@ -66,7 +82,10 @@ curl -X POST http://localhost:8000/v1/ens/subnames \
     "label": "alice-trader",
     "safe_address": "0x1234567890123456789012345678901234567890"
   }'
-#### Set ENS records
+```
+
+### Set ENS records
+```bash
 curl -X PUT http://localhost:8000/v1/ens/records \
   -H "Content-Type: application/json" \
   -d '{
@@ -79,8 +98,11 @@ curl -X PUT http://localhost:8000/v1/ens/records \
       "agent:safe": "0x1234567890123456789012345678901234567890"
     }
   }'
-  #### GET QUOTE (Before setting transaction)
-  curl -X POST http://localhost:8000/v1/trades/quote \
+```
+
+### Get quote
+```bash
+curl -X POST http://localhost:8000/v1/trades/quote \
   -H "Content-Type: application/json" \
   -d '{
     "chain_id": 8453,
@@ -90,7 +112,25 @@ curl -X PUT http://localhost:8000/v1/ens/records \
     "amount_in": "1000000",
     "slippage_bps": 50
   }'
-#### Build Safe-ready trade
+```
+
+### Build trade (swap or order based on routing)
+```bash
+curl -X POST http://localhost:8000/v1/trades/build \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chain_id": 8453,
+    "safe_address": "0x1234567890123456789012345678901234567890",
+    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
+    "token_out": "0x4200000000000000000000000000000000000006",
+    "amount_in": "1000000",
+    "slippage_bps": 50,
+    "permit_signature": "0x..."
+  }'
+```
+
+### Build Safe-ready tx (swap routes only)
+```bash
 curl -X POST http://localhost:8000/v1/trades/prepare-safe-tx \
   -H "Content-Type: application/json" \
   -d '{
@@ -99,7 +139,9 @@ curl -X POST http://localhost:8000/v1/trades/prepare-safe-tx \
     "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
     "token_out": "0x4200000000000000000000000000000000000006",
     "amount_in": "1000000",
-    "slippage_bps": 50
+    "slippage_bps": 50,
+    "permit_signature": "0x..."
   }'
+```
 
 

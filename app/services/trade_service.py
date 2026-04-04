@@ -27,17 +27,32 @@ class TradeService:
 
     @staticmethod
     def _normalize_swap_tx(swap: Dict[str, Any]) -> Dict[str, str]:
-        tx = swap.get("tx", {}) if isinstance(swap.get("tx"), dict) else {}
+        tx = (
+            swap.get("swap", {})
+            if isinstance(swap.get("swap"), dict)
+            else swap.get("tx", {})
+            if isinstance(swap.get("tx"), dict)
+            else {}
+        )
         to = swap.get("to") or tx.get("to")
-        data = swap.get("data") or tx.get("data")
+        data = swap.get("data") if "data" in swap else tx.get("data")
         value = str(swap.get("value") or tx.get("value") or "0")
 
         if not to:
             raise ValueError("swap response missing destination address")
-        if data is None:
+        if not isinstance(data, str) or not data.strip():
             raise ValueError("swap response missing calldata")
 
         return {"to": to, "data": data, "value": value}
+
+    @staticmethod
+    def _route_family(routing: str) -> str:
+        normalized = (routing or "").upper()
+        if normalized in {"CLASSIC", "WRAP", "UNWRAP", "BRIDGE", "CHAINED"}:
+            return "swap"
+        if normalized in {"DUTCH_V2", "DUTCH_V3", "PRIORITY", "DUTCH_LIMIT", "LIMIT_ORDER"}:
+            return "order"
+        raise ValueError(f"unsupported routing from quote: {routing}")
 
     def quote_trade(
         self,
@@ -65,6 +80,7 @@ class TradeService:
         token_out: str,
         amount_in: str,
         slippage_bps: int = 50,
+        permit_signature: Optional[str] = None,
         recipient: Optional[str] = None,
         allowed_tokens_in: Optional[Iterable[str]] = None,
         allowed_tokens_out: Optional[Iterable[str]] = None,
@@ -82,7 +98,7 @@ class TradeService:
             max_input_per_tx=max_input_per_tx,
         )
 
-        swap = self.uniswap_service.build_swap(
+        quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
             wallet_address=safe_address,
             token_in=token_in,
@@ -90,11 +106,42 @@ class TradeService:
             amount_in=amount_in,
             slippage_bps=slippage_bps,
         )
+        routing = str(quote_response.get("routing") or "")
+        quote = quote_response.get("quote")
+        permit_data = quote_response.get("permitData")
+
+        if not isinstance(quote, dict):
+            raise ValueError("quote response missing quote payload")
+
+        route_family = self._route_family(routing)
+        if (permit_data is not None or route_family == "order") and not permit_signature:
+            raise ValueError("permit signature required for this routing")
+
+        if route_family == "order":
+            order = self.uniswap_service.build_order(
+                quote=quote,
+                routing=routing,
+                signature=str(permit_signature),
+            )
+            return {
+                "policyCheck": {"ok": True},
+                "quoteResponse": quote_response,
+                "orderResponse": order,
+                "routing": routing,
+            }
+
+        swap = self.uniswap_service.build_swap(
+            quote=quote,
+            signature=permit_signature,
+            permit_data=permit_data if isinstance(permit_data, dict) else None,
+        )
         tx = self._normalize_swap_tx(swap)
 
         return {
             "policyCheck": {"ok": True},
-            "quoteOrSwapResponse": swap,
+            "quoteResponse": quote_response,
+            "swapResponse": swap,
+            "routing": routing,
             "tx": tx,
         }
 
@@ -106,6 +153,7 @@ class TradeService:
         token_out: str,
         amount_in: str,
         slippage_bps: int = 50,
+        permit_signature: Optional[str] = None,
         recipient: Optional[str] = None,
         allowed_tokens_in: Optional[Iterable[str]] = None,
         allowed_tokens_out: Optional[Iterable[str]] = None,
@@ -124,13 +172,32 @@ class TradeService:
             max_input_per_tx=max_input_per_tx,
         )
 
-        swap = self.uniswap_service.build_swap(
+        quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
             wallet_address=safe_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
             slippage_bps=slippage_bps,
+        )
+        routing = str(quote_response.get("routing") or "")
+        quote = quote_response.get("quote")
+        permit_data = quote_response.get("permitData")
+
+        if not isinstance(quote, dict):
+            raise ValueError("quote response missing quote payload")
+
+        route_family = self._route_family(routing)
+        if route_family != "swap":
+            raise ValueError("prepare-safe-tx only supports swap routes (CLASSIC/WRAP/UNWRAP/BRIDGE)")
+
+        if permit_data is not None and not permit_signature:
+            raise ValueError("permit signature required for this quote")
+
+        swap = self.uniswap_service.build_swap(
+            quote=quote,
+            signature=permit_signature,
+            permit_data=permit_data if isinstance(permit_data, dict) else None,
         )
         tx = self._normalize_swap_tx(swap)
 
@@ -151,7 +218,9 @@ class TradeService:
 
         return {
             "policyCheck": {"ok": True},
+            "quoteResponse": quote_response,
             "simulation": simulation,
             "safeTx": safe_tx,
-            "rawSwap": swap,
+            "swapResponse": swap,
+            "routing": routing,
         }

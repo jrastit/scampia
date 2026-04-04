@@ -45,6 +45,7 @@ class BuildTradeRequest(BaseModel):
     token_out: str
     amount_in: str
     slippage_bps: int = 50
+    permit_signature: Optional[str] = None
     recipient: Optional[str] = None
 
 
