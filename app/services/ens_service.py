@@ -167,7 +167,7 @@ class ENSService:
     def _send_tx(self, tx: dict) -> str:
         self._require_signer()
         tx.setdefault("from", self.account.address)
-        tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
+        tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address, "pending")
         tx["chainId"] = settings.chain_id
         tx.update(self._fee_params())
         if "gas" not in tx:
