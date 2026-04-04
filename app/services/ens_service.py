@@ -378,7 +378,7 @@ class ENSService:
                 try:
                     texts[key] = resolver_contract.functions.text(node, key).call()
                 except Exception:
-                    texts[key] = ""
+                    texts[key] = "test"
 
         return {
             "name": name,
