@@ -43,7 +43,7 @@ except ImportError:
     from user_service import UserService
 
 
-app = FastAPI(title="Scampia API", version="0.2.0")
+app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 init_db()
 
@@ -82,12 +82,42 @@ class PrepareReverseEnsSafeTxRequest(BaseModel):
 
 class PrepareEnsSubnameSafeTxRequest(BaseModel):
     safe_address: str
-    parent_name: str
+    parent_name: str = settings.ens_parent_name
     label: str
     owner_address: str | None = None
     resolver_address: str | None = None
     ttl: int = 0
     operation: int = 0
+
+
+
+
+class PrepareSetEnsAddrSafeTxRequest(BaseModel):
+    safe_address: str
+    name: str
+    address: str
+    resolver_address: str | None = None
+    operation: int = 0
+
+
+class PrepareSetEnsTextSafeTxRequest(BaseModel):
+    safe_address: str
+    name: str
+    key: str
+    value: str
+    resolver_address: str | None = None
+    operation: int = 0
+
+
+class RegisterSafeEnsRequest(BaseModel):
+    safe_address: str
+    label: str
+    parent_name: str = settings.ens_parent_name
+    resolver_address: str | None = None
+    ttl: int = 0
+    address: str | None = None
+    set_reverse: bool = True
+    texts: dict[str, str] = {}
 
 
 class DeploySafeRequest(BaseModel):
@@ -97,6 +127,19 @@ class DeploySafeRequest(BaseModel):
 
 class ConnectWalletRequest(BaseModel):
     wallet_address: str
+
+
+class WithdrawEthRequest(BaseModel):
+    safe_address: str
+    to: str
+    amount: str
+
+
+class WithdrawTokenRequest(BaseModel):
+    safe_address: str
+    to: str
+    token_address: str
+    amount: str
 
 
 @app.get("/health")
@@ -226,6 +269,58 @@ def execute_direct(req: ExecuteSafeTxRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Withdraw
+
+@app.post("/v1/safes/withdraw/eth/build")
+def build_withdraw_eth(req: WithdrawEthRequest):
+    try:
+        return safe_service.build_withdraw_eth(
+            safe_address=req.safe_address,
+            to=req.to,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/eth/execute")
+def execute_withdraw_eth(req: WithdrawEthRequest):
+    try:
+        return safe_service.withdraw_eth(
+            safe_address=req.safe_address,
+            to=req.to,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/token/build")
+def build_withdraw_token(req: WithdrawTokenRequest):
+    try:
+        return safe_service.build_withdraw_token(
+            safe_address=req.safe_address,
+            to=req.to,
+            token_address=req.token_address,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/token/execute")
+def execute_withdraw_token(req: WithdrawTokenRequest):
+    try:
+        return safe_service.withdraw_token(
+            safe_address=req.safe_address,
+            to=req.to,
+            token_address=req.token_address,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ENS
 
 @app.post("/v1/ens/reverse")
@@ -310,6 +405,91 @@ def update_ens_records(req: UpdateEnsRecordsRequest):
         if req.texts:
             result["texts"] = ens_service.set_text_records(req.name, req.texts)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+
+
+@app.get("/v1/ens/config")
+def get_ens_config():
+    return {
+        "network": settings.network,
+        "chainId": settings.chain_id,
+        "parentName": settings.ens_parent_name,
+        "registryAddress": settings.ens_registry_address,
+        "reverseRegistrarAddress": settings.ens_reverse_registrar_address,
+        "publicResolverAddress": settings.ens_public_resolver_address,
+    }
+
+
+@app.post("/v1/ens/register-safe")
+def register_safe_ens(req: RegisterSafeEnsRequest):
+    try:
+        resolver = req.resolver_address or settings.ens_public_resolver_address
+        if not resolver:
+            raise ValueError("resolver_address is required")
+
+        full_name = ens_service.resolve_full_name(req.label, req.parent_name)
+        result = {
+            "subname": ens_service.create_subname(
+                parent_name=req.parent_name,
+                label=req.label,
+                owner_address=req.safe_address,
+                resolver_address=resolver,
+                ttl=req.ttl,
+            )
+        }
+
+        if req.address:
+            result["addr"] = ens_service.set_addr(full_name, req.address, resolver_address=resolver)
+
+        if req.texts:
+            result["texts"] = ens_service.set_text_records(full_name, req.texts, resolver_address=resolver)
+
+        if req.set_reverse:
+            result["reverse"] = ens_service.set_reverse_name(req.safe_address, full_name)
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/ens/addr/prepare-safe-tx")
+def prepare_set_ens_addr_safe_tx(req: PrepareSetEnsAddrSafeTxRequest):
+    try:
+        tx = ens_service.build_set_addr_tx(
+            name=req.name,
+            address=req.address,
+            resolver_address=req.resolver_address,
+        )
+        return safe_service.build_safe_tx(
+            safe_address=req.safe_address,
+            to=tx["to"],
+            data=tx["data"],
+            value=tx["value"],
+            operation=req.operation,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/ens/text/prepare-safe-tx")
+def prepare_set_ens_text_safe_tx(req: PrepareSetEnsTextSafeTxRequest):
+    try:
+        tx = ens_service.build_set_text_tx(
+            name=req.name,
+            key=req.key,
+            value=req.value,
+            resolver_address=req.resolver_address,
+        )
+        return safe_service.build_safe_tx(
+            safe_address=req.safe_address,
+            to=tx["to"],
+            data=tx["data"],
+            value=tx["value"],
+            operation=req.operation,
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

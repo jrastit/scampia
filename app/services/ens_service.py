@@ -10,7 +10,16 @@ except ImportError:
     from config import settings
 
 
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 ENS_REGISTRY_ABI = [
+    {
+        "inputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
     {
         "inputs": [{"internalType": "bytes32", "name": "node", "type": "bytes32"}],
         "name": "resolver",
@@ -102,7 +111,7 @@ def labelhash(label: str) -> bytes:
 def namehash(name: str) -> bytes:
     node = b"\x00" * 32
     if name:
-        labels = name.split(".")
+        labels = [label for label in name.split(".") if label]
         for label in reversed(labels):
             node = keccak(node + keccak(text=label))
     return node
@@ -111,7 +120,13 @@ def namehash(name: str) -> bytes:
 class ENSService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(settings.rpc_url))
-        self.account = Account.from_key(settings.backend_private_key) if settings.backend_private_key else None
+
+        # ens_private_key is not present in the provided config.py, so use a safe fallback.
+        ens_private_key = getattr(settings, "ens_private_key", "") or getattr(
+            settings, "backend_private_key", ""
+        )
+        self.account = Account.from_key(ens_private_key) if ens_private_key else None
+
         self.registry = self.w3.eth.contract(
             address=to_checksum_address(settings.ens_registry_address),
             abi=ENS_REGISTRY_ABI,
@@ -125,19 +140,53 @@ class ENSService:
 
     def _require_signer(self) -> None:
         if not self.account:
-            raise ValueError("BACKEND_PRIVATE_KEY is required for ENS write operations")
+            raise ValueError(
+                "ens_private_key or backend_private_key is required for ENS write operations"
+            )
+
+    def _fee_params(self) -> dict:
+        latest_block = self.w3.eth.get_block("latest")
+        base_fee = latest_block.get("baseFeePerGas")
+
+        if base_fee is not None:
+            try:
+                priority_fee = self.w3.eth.max_priority_fee
+            except Exception:
+                priority_fee = self.w3.to_wei(2, "gwei")
+
+            max_fee = int(base_fee * 2 + priority_fee)
+            return {
+                "maxPriorityFeePerGas": int(priority_fee),
+                "maxFeePerGas": max_fee,
+            }
+
+        return {
+            "gasPrice": int(self.w3.eth.gas_price),
+        }
 
     def _send_tx(self, tx: dict) -> str:
         self._require_signer()
+        tx.setdefault("from", self.account.address)
         tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
         tx["chainId"] = settings.chain_id
-        tx["gasPrice"] = self.w3.eth.gas_price
+        tx.update(self._fee_params())
         if "gas" not in tx:
             tx["gas"] = 350000
 
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         return self.w3.to_hex(tx_hash)
+
+    def resolve_full_name(self, label: Optional[str], parent_name: Optional[str] = None) -> str:
+        parent = (parent_name or settings.ens_parent_name).strip(".")
+        lbl = (label or "").strip(".")
+        return f"{lbl}.{parent}" if lbl else parent
+
+    def get_name_owner(self, name: str) -> str:
+        return self.registry.functions.owner(namehash(name)).call()
+
+    def get_resolver(self, name: str) -> str:
+        return self.registry.functions.resolver(namehash(name)).call()
 
     def build_create_subname_tx(
         self,
@@ -158,13 +207,15 @@ class ENSService:
                 ttl,
             ],
         )
-        full_name = f"{label}.{parent_name}"
+        full_name = self.resolve_full_name(label, parent_name)
         return {
             "to": self.registry.address,
             "data": data,
             "value": "0",
             "name": full_name,
             "node": self.w3.to_hex(namehash(full_name)),
+            "parentNode": self.w3.to_hex(parent_node),
+            "label": label,
         }
 
     def create_subname(
@@ -182,14 +233,20 @@ class ENSService:
             to_checksum_address(owner_address),
             to_checksum_address(resolver_address),
             ttl,
-        ).build_transaction({"from": self.account.address})
+        ).build_transaction({
+            "from": self.account.address,
+            "gas": 350000,
+            **self._fee_params(),
+        })
         tx_hash = self._send_tx(tx)
 
-        full_name = f"{label}.{parent_name}"
+        full_name = self.resolve_full_name(label, parent_name)
         return {
             "tx_hash": tx_hash,
             "name": full_name,
             "node": self.w3.to_hex(namehash(full_name)),
+            "owner": to_checksum_address(owner_address),
+            "resolver": to_checksum_address(resolver_address),
         }
 
     def build_set_reverse_name_tx(self, target_address: str, name: str) -> dict:
@@ -216,7 +273,11 @@ class ENSService:
         tx = self.reverse_registrar.functions.setNameForAddr(
             to_checksum_address(target_address),
             name,
-        ).build_transaction({"from": self.account.address})
+        ).build_transaction({
+            "from": self.account.address,
+            "gas": 350000,
+            **self._fee_params(),
+        })
         tx_hash = self._send_tx(tx)
         return {
             "tx_hash": tx_hash,
@@ -224,61 +285,105 @@ class ENSService:
             "name": name,
         }
 
-    def get_resolver(self, name: str) -> str:
+    def build_set_addr_tx(self, name: str, address: str, resolver_address: Optional[str] = None) -> dict:
         node = namehash(name)
-        return self.registry.functions.resolver(node).call()
+        resolver = resolver_address or self.get_resolver(name)
+        if not resolver or resolver == ZERO_ADDRESS:
+            raise ValueError(f"No resolver configured for {name}")
+        resolver_contract = self.w3.eth.contract(
+            address=to_checksum_address(resolver),
+            abi=PUBLIC_RESOLVER_ABI,
+        )
+        data = resolver_contract.encode_abi("setAddr", args=[node, to_checksum_address(address)])
+        return {
+            "to": to_checksum_address(resolver),
+            "data": data,
+            "value": "0",
+            "name": name,
+            "address": to_checksum_address(address),
+            "resolver": to_checksum_address(resolver),
+            "node": self.w3.to_hex(node),
+        }
 
     def set_addr(self, name: str, address: str, resolver_address: Optional[str] = None) -> dict:
         self._require_signer()
+        tx_data = self.build_set_addr_tx(name=name, address=address, resolver_address=resolver_address)
+        tx_hash = self._send_tx({
+            "from": self.account.address,
+            "to": tx_data["to"],
+            "data": tx_data["data"],
+            "value": 0,
+        })
+        return {"tx_hash": tx_hash, "name": name, "address": to_checksum_address(address)}
+
+    def build_set_text_tx(
+        self,
+        name: str,
+        key: str,
+        value: str,
+        resolver_address: Optional[str] = None,
+    ) -> dict:
         node = namehash(name)
         resolver = resolver_address or self.get_resolver(name)
+        if not resolver or resolver == ZERO_ADDRESS:
+            raise ValueError(f"No resolver configured for {name}")
         resolver_contract = self.w3.eth.contract(
             address=to_checksum_address(resolver),
             abi=PUBLIC_RESOLVER_ABI,
         )
-        tx = resolver_contract.functions.setAddr(
-            node,
-            to_checksum_address(address),
-        ).build_transaction({"from": self.account.address})
-        tx_hash = self._send_tx(tx)
-        return {"tx_hash": tx_hash, "name": name, "address": to_checksum_address(address)}
+        data = resolver_contract.encode_abi("setText", args=[node, key, value])
+        return {
+            "to": to_checksum_address(resolver),
+            "data": data,
+            "value": "0",
+            "name": name,
+            "key": key,
+            "textValue": value,
+            "resolver": to_checksum_address(resolver),
+            "node": self.w3.to_hex(node),
+        }
 
     def set_text_records(self, name: str, texts: Dict[str, str], resolver_address: Optional[str] = None) -> dict:
         self._require_signer()
-        node = namehash(name)
-        resolver = resolver_address or self.get_resolver(name)
-        resolver_contract = self.w3.eth.contract(
-            address=to_checksum_address(resolver),
-            abi=PUBLIC_RESOLVER_ABI,
-        )
-
         tx_hashes = []
         for key, value in texts.items():
-            tx = resolver_contract.functions.setText(node, key, value).build_transaction(
-                {"from": self.account.address}
-            )
-            tx_hashes.append(self._send_tx(tx))
+            tx_data = self.build_set_text_tx(name=name, key=key, value=value, resolver_address=resolver_address)
+            tx_hashes.append(self._send_tx({
+                "from": self.account.address,
+                "to": tx_data["to"],
+                "data": tx_data["data"],
+                "value": 0,
+            }))
 
         return {"name": name, "tx_hashes": tx_hashes, "texts": texts}
 
     def get_profile(self, name: str, text_keys: Optional[list[str]] = None) -> dict:
         node = namehash(name)
+        owner = self.get_name_owner(name)
         resolver = self.get_resolver(name)
-        resolver_contract = self.w3.eth.contract(
-            address=to_checksum_address(resolver),
-            abi=PUBLIC_RESOLVER_ABI,
-        )
-        addr = resolver_contract.functions.addr(node).call()
 
+        addr = ZERO_ADDRESS
         texts = {}
-        for key in text_keys or []:
+        if resolver and resolver != ZERO_ADDRESS:
+            resolver_contract = self.w3.eth.contract(
+                address=to_checksum_address(resolver),
+                abi=PUBLIC_RESOLVER_ABI,
+            )
             try:
-                texts[key] = resolver_contract.functions.text(node, key).call()
+                addr = resolver_contract.functions.addr(node).call()
             except Exception:
-                texts[key] = ""
+                addr = ZERO_ADDRESS
+
+            for key in text_keys or []:
+                try:
+                    texts[key] = resolver_contract.functions.text(node, key).call()
+                except Exception:
+                    texts[key] = ""
 
         return {
             "name": name,
+            "node": self.w3.to_hex(node),
+            "owner": owner,
             "resolver": resolver,
             "address": addr,
             "texts": texts,
