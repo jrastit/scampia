@@ -15,3 +15,4 @@ class User(Base):
     chain_id = Column(Integer, nullable=False, default=11155111)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    agent_active_transactions = Column(Integer, default=0)
