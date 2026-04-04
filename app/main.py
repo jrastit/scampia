@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from app.config import settings
@@ -45,6 +46,13 @@ except ImportError:
 app = FastAPI(title="Scampia API", version="0.2.0")
 
 init_db()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 ens_service = ENSService()
 safe_service = SafeService()
