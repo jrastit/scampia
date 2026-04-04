@@ -142,6 +142,7 @@ class Settings:
 
     # ── Secret (from .env ONLY) ──
     backend_private_key: str = os.getenv("BACKEND_PRIVATE_KEY", "")
+    ens_private_key: str = os.getenv("ENS_PRIVATE_KEY", "")
 
     # ── Policy defaults ──
     @property

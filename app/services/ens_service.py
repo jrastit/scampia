@@ -120,7 +120,13 @@ def namehash(name: str) -> bytes:
 class ENSService:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(settings.rpc_url))
-        self.account = Account.from_key(settings.backend_private_key) if settings.backend_private_key else None
+
+        # ens_private_key is not present in the provided config.py, so use a safe fallback.
+        ens_private_key = getattr(settings, "ens_private_key", "") or getattr(
+            settings, "backend_private_key", ""
+        )
+        self.account = Account.from_key(ens_private_key) if ens_private_key else None
+
         self.registry = self.w3.eth.contract(
             address=to_checksum_address(settings.ens_registry_address),
             abi=ENS_REGISTRY_ABI,
@@ -134,14 +140,36 @@ class ENSService:
 
     def _require_signer(self) -> None:
         if not self.account:
-            raise ValueError("BACKEND_PRIVATE_KEY is required for ENS write operations")
+            raise ValueError(
+                "ens_private_key or backend_private_key is required for ENS write operations"
+            )
+
+    def _fee_params(self) -> dict:
+        latest_block = self.w3.eth.get_block("latest")
+        base_fee = latest_block.get("baseFeePerGas")
+
+        if base_fee is not None:
+            try:
+                priority_fee = self.w3.eth.max_priority_fee
+            except Exception:
+                priority_fee = self.w3.to_wei(2, "gwei")
+
+            max_fee = int(base_fee * 2 + priority_fee)
+            return {
+                "maxPriorityFeePerGas": int(priority_fee),
+                "maxFeePerGas": max_fee,
+            }
+
+        return {
+            "gasPrice": int(self.w3.eth.gas_price),
+        }
 
     def _send_tx(self, tx: dict) -> str:
         self._require_signer()
         tx.setdefault("from", self.account.address)
         tx["nonce"] = self.w3.eth.get_transaction_count(self.account.address)
         tx["chainId"] = settings.chain_id
-        tx["gasPrice"] = self.w3.eth.gas_price
+        tx.update(self._fee_params())
         if "gas" not in tx:
             tx["gas"] = 350000
 
@@ -205,7 +233,11 @@ class ENSService:
             to_checksum_address(owner_address),
             to_checksum_address(resolver_address),
             ttl,
-        ).build_transaction({"from": self.account.address})
+        ).build_transaction({
+            "from": self.account.address,
+            "gas": 350000,
+            **self._fee_params(),
+        })
         tx_hash = self._send_tx(tx)
 
         full_name = self.resolve_full_name(label, parent_name)
@@ -241,7 +273,11 @@ class ENSService:
         tx = self.reverse_registrar.functions.setNameForAddr(
             to_checksum_address(target_address),
             name,
-        ).build_transaction({"from": self.account.address})
+        ).build_transaction({
+            "from": self.account.address,
+            "gas": 350000,
+            **self._fee_params(),
+        })
         tx_hash = self._send_tx(tx)
         return {
             "tx_hash": tx_hash,
