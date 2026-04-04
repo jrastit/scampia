@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
+
+from app.data import user_data
 
 try:
     from app.schemas import BuildTradeRequest, UniswapQuoteRequest
@@ -9,6 +11,9 @@ except ImportError:
     from policy_service import PolicyViolation
     from simulation_service import SimulationError
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer()
 
 def build_router(trade_service, settings) -> APIRouter:
     router = APIRouter(prefix="/v1/trades", tags=["trades"])
@@ -49,7 +54,14 @@ def build_router(trade_service, settings) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/prepare-safe-tx")
-    def prepare_safe_trade(req: BuildTradeRequest):
+    def prepare_safe_trade(req: BuildTradeRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+        api_key = credentials.credentials
+        user = user_data.get_user_by_api_key(api_key)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key"
+            )
         try:
             return trade_service.prepare_safe_trade(
                 chain_id=req.chain_id,
@@ -64,6 +76,7 @@ def build_router(trade_service, settings) -> APIRouter:
                 allowed_tokens_out=settings.trade_allowed_tokens_out,
                 max_input_per_tx=settings.trade_max_input_per_tx,
                 operation=0,
+                user_id = user.id
             )
         except PolicyViolation as e:
             raise HTTPException(status_code=403, detail=str(e))

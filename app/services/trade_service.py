@@ -1,5 +1,7 @@
 from typing import Any, Dict, Iterable, Optional
 
+from app.data import user_data
+
 try:
     from app.services.policy_service import PolicyService
     from app.services.safe_service import SafeService
@@ -147,7 +149,7 @@ class TradeService:
         )
         tx = self._normalize_swap_tx(swap)
 
-            return {
+        return {
                 "policyCheck": {"ok": True},
                 "quoteOrSwapResponse": swap,
                 "tx": tx,
@@ -160,6 +162,7 @@ class TradeService:
         token_in: str,
         token_out: str,
         amount_in: str,
+        user_id: int,
         slippage_bps: int = 50,
         permit_signature: Optional[str] = None,
         recipient: Optional[str] = None,
@@ -205,7 +208,7 @@ class TradeService:
                 value=tx["value"],
                 operation=operation,
             )
-
+            user_data.increment_active_transactions(user_id)
             return {
                 "policyCheck": {"ok": True},
                 "simulation": simulation,
