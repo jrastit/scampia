@@ -6,3 +6,6 @@ web3
 eth-account
 eth-utils
 safe-eth-py
+dotenv
+pyyaml
+sqlalchemy
