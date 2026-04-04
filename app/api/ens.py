@@ -227,7 +227,7 @@ def build_router(ens_service, safe_service, settings) -> APIRouter:
         try:
             return ens_service.get_profile(
                 name,
-                text_keys=["agent:type", "agent:capabilities", "agent:api", "agent:safe"],
+                text_keys=["stop_loss_pct", "take_profit_pct", "max_open_positions", "min_eth_balance", "max_slippage_tolerance_pct", "max_gas_price_gwei", "authorized_tokens"],
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
