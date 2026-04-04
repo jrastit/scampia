@@ -42,7 +42,13 @@ except ImportError:
     from user_service import UserService
 
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    openapi_url="/v1/openapi.json",
+    docs_url="/v1/docs",
+    redoc_url="/v1/redoc",
+)
 
 init_db()
 
