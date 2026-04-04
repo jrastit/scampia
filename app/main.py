@@ -42,7 +42,13 @@ except ImportError:
     from user_service import UserService
 
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.app_version,
+    openapi_url="/v1/openapi.json",
+    docs_url="/v1/docs",
+    redoc_url="/v1/redoc",
+)
 
 init_db()
 
@@ -401,8 +407,6 @@ def update_ens_records(req: UpdateEnsRecordsRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-
-
 @app.get("/v1/ens/config")
 def get_ens_config():
     return {
@@ -425,7 +429,7 @@ def register_safe_ens(req: RegisterSafeEnsRequest):
         full_name = ens_service.resolve_full_name(req.label, req.parent_name)
         result = {
             "subname": ens_service.create_subname(
-                parent_name=req.parent_name,
+                parent_name=settings.parent_name,
                 label=req.label,
                 owner_address=req.safe_address,
                 resolver_address=resolver,
