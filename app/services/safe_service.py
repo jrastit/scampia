@@ -320,7 +320,7 @@ class SafeService:
         ).build_transaction({
             "chainId": settings.chain_id,
             "from": self.backend_account.address,
-            "nonce": self.w3.eth.get_transaction_count(self.backend_account.address),
+            "nonce": self.w3.eth.get_transaction_count(self.backend_account.address, "pending"),
             "gas": 500_000,
             "gasPrice": self.w3.eth.gas_price,
         })

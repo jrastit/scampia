@@ -16,3 +16,8 @@ venv/
 *.swp
 *.swo
 .DS_Store
+app/.gitignore
+app/.env
+app/.env.local
+app/.env.production
+*.pyc

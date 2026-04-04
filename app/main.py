@@ -1,5 +1,7 @@
-from fastapi import FastAPI
-
+from fastapi import FastAPI, HTTPException, Depends
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 try:
     from app.api.ens import build_router as build_ens_router
     from app.api.health import build_router as build_health_router
@@ -41,6 +43,13 @@ app = FastAPI(
 )
 
 init_db()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 ens_service = ENSService()
 safe_service = SafeService()
