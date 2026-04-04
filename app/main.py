@@ -2,10 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-try:
-    from app.config import settings
-    from app.data import get_db, init_db
-    from app.schemas import (
+from app.config import settings
+from app.data import get_db, init_db
+from app.schemas import (
         BuildTradeRequest,
         CreateEnsSubnameRequest,
         ExecuteSafeTxRequest,
@@ -14,32 +13,13 @@ try:
         UniswapQuoteRequest,
         UpdateEnsRecordsRequest,
     )
-    from app.services.ens_service import ENSService
-    from app.services.policy_service import PolicyService, PolicyViolation
-    from app.services.safe_service import SafeService
-    from app.services.simulation_service import SimulationError, SimulationService
-    from app.services.trade_service import TradeService
-    from app.services.uniswap_service import UniswapService
-    from app.services.user_service import UserService
-except ImportError:
-    from config import settings
-    from data import get_db, init_db
-    from schemas import (
-        BuildTradeRequest,
-        CreateEnsSubnameRequest,
-        ExecuteSafeTxRequest,
-        ImportSafeRequest,
-        SafeBuildTxRequest,
-        UniswapQuoteRequest,
-        UpdateEnsRecordsRequest,
-    )
-    from ens_service import ENSService
-    from policy_service import PolicyService, PolicyViolation
-    from safe_service import SafeService
-    from simulation_service import SimulationError, SimulationService
-    from trade_service import TradeService
-    from uniswap_service import UniswapService
-    from user_service import UserService
+from app.services.ens_service import ENSService
+from app.services.policy_service import PolicyService, PolicyViolation
+from app.services.safe_service import SafeService
+from app.services.simulation_service import SimulationError, SimulationService
+from app.services.trade_service import TradeService
+from app.services.uniswap_service import UniswapService
+from app.services.user_service import UserService
 
 
 app = FastAPI(
