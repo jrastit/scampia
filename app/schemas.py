@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-
+from app.config import settings
 from pydantic import BaseModel, Field
 
 
@@ -16,7 +16,7 @@ class ImportSafeRequest(BaseModel):
 
 
 class CreateEnsSubnameRequest(BaseModel):
-    parent_name: str
+    parent_name: str = settings.ens_parent_name
     label: str
     safe_address: str
     owner_address: Optional[str] = None
@@ -45,6 +45,7 @@ class BuildTradeRequest(BaseModel):
     token_out: str
     amount_in: str
     slippage_bps: int = 50
+    permit_signature: Optional[str] = None
     recipient: Optional[str] = None
 
 

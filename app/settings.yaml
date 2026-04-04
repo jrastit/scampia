@@ -20,7 +20,6 @@ safe:
 
 # ── ENS Sepolia ──
 ens:
-  parent_name: "scampia.eth"
   registry_address: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
   reverse_registrar_address: "0xA0a1AbcDAe1a2a4A2EF8e9113Ff0e02DD81DC0C6"
   public_resolver_address: "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5"
