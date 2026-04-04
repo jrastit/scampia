@@ -103,6 +103,12 @@ class Settings:
     )
     safe_api_key: str = os.getenv("SAFE_API_KEY", "")
 
+    # ── Vault ──
+    vault_address: str = str(_get(["vault", "address"], "VAULT_ADDRESS", ""))
+    vault_asset_token: str = str(
+        _get(["vault", "asset_token"], "VAULT_ASSET_TOKEN", _get(["tokens", "usdc"], "USDC_ADDRESS", ""))
+    )
+
     # ── Tokens ──
     usdc_address: str = str(
         _get(["tokens", "usdc"], "USDC_ADDRESS", "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238")

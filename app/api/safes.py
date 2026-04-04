@@ -1,67 +1,50 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-try:
-    from app.schemas import ExecuteSafeTxRequest, ImportSafeRequest, SafeBuildTxRequest
-except ImportError:
-    from schemas import ExecuteSafeTxRequest, ImportSafeRequest, SafeBuildTxRequest
 
-
-class DeploySafeRequest(BaseModel):
-    owner_address: str
-    threshold: int = 1
-
-
-class WithdrawEthRequest(BaseModel):
-    safe_address: str
-    to: str
+class VaultAmountRequest(BaseModel):
+    vault_address: str
     amount: str
+    receiver: str
 
 
-class WithdrawTokenRequest(BaseModel):
-    safe_address: str
-    to: str
-    token_address: str
-    amount: str
+class ImportVaultRequest(BaseModel):
+    vault_address: str
+    chain_id: int
 
 
-def build_router(safe_service) -> APIRouter:
-    router = APIRouter(prefix="/v1/safes", tags=["safes"])
+class AgentSwapRequest(BaseModel):
+    vault_address: str
+    target: str
+    data: str
+    token_out: str
+    min_token_out: str = "0"
+    value: str = "0"
 
-    @router.post("/deploy")
-    def deploy_safe(req: DeploySafeRequest):
-        try:
-            return safe_service.deploy_safe(
-                owner_address=req.owner_address,
-                threshold=req.threshold,
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+
+def build_router(vault_service) -> APIRouter:
+    router = APIRouter(prefix="/v1/vaults", tags=["vaults"])
 
     @router.post("/import")
-    def import_safe(req: ImportSafeRequest):
-        return safe_service.import_safe(req.safe_address, req.chain_id)
-
-    @router.get("/{safe_address}")
-    def get_safe_info(safe_address: str):
+    def import_vault(req: ImportVaultRequest):
         try:
-            return safe_service.get_safe_info(safe_address)
+            return vault_service.import_vault(req.vault_address, chain_id=req.chain_id)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{safe_address}/balances")
-    def get_safe_balances(safe_address: str):
+    @router.get("/{vault_address}/balances")
+    def get_vault_balances(vault_address: str):
         try:
-            return safe_service.get_all_balances(safe_address)
+            return vault_service.get_all_balances(vault_address)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{safe_address}/balance/{token_address}")
-    def get_token_balance(safe_address: str, token_address: str):
+    @router.get("/{vault_address}/balance/{token_address}")
+    def get_token_balance(vault_address: str, token_address: str):
         try:
-            balance = safe_service.get_token_balance(safe_address, token_address)
-            decimals = safe_service.get_token_decimals(token_address)
-            symbol = safe_service.get_token_symbol(token_address)
+            balance = vault_service.get_token_balance(vault_address, token_address)
+            decimals = vault_service.get_token_decimals(token_address)
+            symbol = vault_service.get_token_symbol(token_address)
             return {
                 "token": token_address,
                 "symbol": symbol,
@@ -72,85 +55,52 @@ def build_router(safe_service) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{safe_address}/owners")
-    def get_safe_owners(safe_address: str):
+    @router.post("/deposit/build")
+    def build_deposit(req: VaultAmountRequest):
         try:
-            return {"safeAddress": safe_address, "owners": safe_service.get_owners(safe_address)}
+            return vault_service.build_deposit_tx(
+                vault_address=req.vault_address,
+                amount=int(req.amount),
+                receiver=req.receiver,
+            )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{safe_address}/owners/{address}/check")
-    def check_is_owner(safe_address: str, address: str):
+    @router.post("/withdraw/build")
+    def build_withdraw(req: VaultAmountRequest):
         try:
-            return {"address": address, "isOwner": safe_service.is_owner(safe_address, address)}
+            return vault_service.build_withdraw_tx(
+                vault_address=req.vault_address,
+                amount=int(req.amount),
+                receiver=req.receiver,
+            )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/build-tx")
-    def build_safe_tx(req: SafeBuildTxRequest):
-        return safe_service.build_safe_tx(
-            safe_address=req.safe_address,
-            to=req.to,
-            data=req.data,
-            value=req.value,
-            operation=req.operation,
-        )
-
-    @router.post("/execute-direct")
-    def execute_direct(req: ExecuteSafeTxRequest):
+    @router.post("/agent-swap/build")
+    def build_agent_swap(req: AgentSwapRequest):
         try:
-            return safe_service.execute_safe_tx(
-                safe_address=req.safe_address,
-                to=req.to,
+            return vault_service.build_agent_swap_tx(
+                vault_address=req.vault_address,
+                target=req.target,
                 data=req.data,
+                token_out=req.token_out,
+                min_token_out=int(req.min_token_out),
                 value=int(req.value),
-                operation=req.operation,
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/withdraw/eth/build")
-    def build_withdraw_eth(req: WithdrawEthRequest):
+    @router.post("/agent-swap/execute")
+    def execute_agent_swap(req: AgentSwapRequest):
         try:
-            return safe_service.build_withdraw_eth(
-                safe_address=req.safe_address,
-                to=req.to,
-                amount=int(req.amount),
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    @router.post("/withdraw/eth/execute")
-    def execute_withdraw_eth(req: WithdrawEthRequest):
-        try:
-            return safe_service.withdraw_eth(
-                safe_address=req.safe_address,
-                to=req.to,
-                amount=int(req.amount),
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    @router.post("/withdraw/token/build")
-    def build_withdraw_token(req: WithdrawTokenRequest):
-        try:
-            return safe_service.build_withdraw_token(
-                safe_address=req.safe_address,
-                to=req.to,
-                token_address=req.token_address,
-                amount=int(req.amount),
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    @router.post("/withdraw/token/execute")
-    def execute_withdraw_token(req: WithdrawTokenRequest):
-        try:
-            return safe_service.withdraw_token(
-                safe_address=req.safe_address,
-                to=req.to,
-                token_address=req.token_address,
-                amount=int(req.amount),
+            return vault_service.execute_agent_swap(
+                vault_address=req.vault_address,
+                target=req.target,
+                data=req.data,
+                token_out=req.token_out,
+                min_token_out=int(req.min_token_out),
+                value=int(req.value),
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))

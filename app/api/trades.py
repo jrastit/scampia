@@ -16,9 +16,10 @@ def build_router(trade_service, settings) -> APIRouter:
     @router.post("/quote")
     def get_trade_quote(req: UniswapQuoteRequest):
         try:
+            wallet_address = req.resolve_wallet_address()
             return trade_service.quote_trade(
                 chain_id=req.chain_id,
-                safe_address=req.safe_address,
+                vault_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -30,9 +31,10 @@ def build_router(trade_service, settings) -> APIRouter:
     @router.post("/build")
     def build_trade(req: BuildTradeRequest):
         try:
+            wallet_address = req.resolve_wallet_address()
             return trade_service.build_trade(
                 chain_id=req.chain_id,
-                safe_address=req.safe_address,
+                vault_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -48,12 +50,13 @@ def build_router(trade_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/prepare-safe-tx")
-    def prepare_safe_trade(req: BuildTradeRequest):
+    @router.post("/prepare-vault-tx")
+    def prepare_vault_trade(req: BuildTradeRequest):
         try:
-            return trade_service.prepare_safe_trade(
+            wallet_address = req.resolve_wallet_address()
+            return trade_service.prepare_vault_trade(
                 chain_id=req.chain_id,
-                safe_address=req.safe_address,
+                vault_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -63,7 +66,30 @@ def build_router(trade_service, settings) -> APIRouter:
                 allowed_tokens_in=settings.trade_allowed_tokens_in,
                 allowed_tokens_out=settings.trade_allowed_tokens_out,
                 max_input_per_tx=settings.trade_max_input_per_tx,
-                operation=0,
+            )
+        except PolicyViolation as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except SimulationError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.post("/prepare-safe-tx")
+    def prepare_safe_trade_compat(req: BuildTradeRequest):
+        return prepare_vault_trade(req)
+
+    @router.post("/execute-vault-swap")
+    def execute_vault_swap(req: BuildTradeRequest):
+        try:
+            wallet_address = req.resolve_wallet_address()
+            return trade_service.execute_vault_swap(
+                chain_id=req.chain_id,
+                vault_address=wallet_address,
+                token_in=req.token_in,
+                token_out=req.token_out,
+                amount_in=req.amount_in,
+                slippage_bps=req.slippage_bps,
+                permit_signature=req.permit_signature,
             )
         except PolicyViolation as e:
             raise HTTPException(status_code=403, detail=str(e))

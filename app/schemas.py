@@ -31,22 +31,36 @@ class UpdateEnsRecordsRequest(BaseModel):
 
 class UniswapQuoteRequest(BaseModel):
     chain_id: int
-    safe_address: str
+    vault_address: Optional[str] = None
+    safe_address: Optional[str] = None
     token_in: str
     token_out: str
     amount_in: str
     slippage_bps: int = 50
 
+    def resolve_wallet_address(self) -> str:
+        addr = self.vault_address or self.safe_address
+        if not addr:
+            raise ValueError("vault_address is required")
+        return addr
+
 
 class BuildTradeRequest(BaseModel):
     chain_id: int
-    safe_address: str
+    vault_address: Optional[str] = None
+    safe_address: Optional[str] = None
     token_in: str
     token_out: str
     amount_in: str
     slippage_bps: int = 50
     permit_signature: Optional[str] = None
     recipient: Optional[str] = None
+
+    def resolve_wallet_address(self) -> str:
+        addr = self.vault_address or self.safe_address
+        if not addr:
+            raise ValueError("vault_address is required")
+        return addr
 
 
 class SafeBuildTxRequest(BaseModel):
