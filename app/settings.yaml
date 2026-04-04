@@ -1,0 +1,40 @@
+# ─────────────────────────────────────
+# Scampia — Shared configuration
+# Ce fichier se commit dans le repo.
+# Pas de secrets ici.
+# ─────────────────────────────────────
+
+app:
+  name: scampia
+  version: 0.2.0
+
+# ── Blockchain ──
+chain:
+  id: 11155111          # Sepolia
+  rpc_url: https://rpc.sepolia.org
+
+# ── Safe ──
+safe:
+  address: "0x8f69DCFF0fe4aCFD048fEE81F29B76eC34773de1"
+  tx_service: https://safe-transaction-sepolia.safe.global
+
+# ── Tokens Sepolia ──
+tokens:
+  usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+  weth: "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"
+
+# ── Uniswap V3 Sepolia ──
+uniswap:
+  swap_router: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E"
+  factory: "0x0227628f3F023bb0B980b67D528571c95c6DaC1c"
+  quoter: "0xEd1f6473345F45b75F8179591dd5bA1888cf2FB3"
+
+# ── Policy defaults ──
+policy:
+  max_input_per_tx: 1000000000
+  allowed_tokens_in:
+    - "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"   # USDC
+  allowed_tokens_out:
+    - "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"   # WETH
+  allowed_contracts:
+    - "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E"   # SwapRouter02
