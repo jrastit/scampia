@@ -18,6 +18,13 @@ safe:
   address: "0x8f69DCFF0fe4aCFD048fEE81F29B76eC34773de1"
   tx_service: https://safe-transaction-sepolia.safe.global
 
+# ── ENS Sepolia ──
+ens:
+  parent_name: "scampia.eth"
+  registry_address: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+  reverse_registrar_address: "0xA0a1AbcDAe1a2a4A2EF8e9113Ff0e02DD81DC0C6"
+  public_resolver_address: "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5"
+
 # ── Tokens Sepolia ──
 tokens:
   usdc: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
