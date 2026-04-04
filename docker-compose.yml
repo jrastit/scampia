@@ -1,0 +1,16 @@
+services:
+  scampia:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: scampia-api
+    container_name: scampia-api
+    env_file:
+      - .env
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      APP_ROOT_PATH: /api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

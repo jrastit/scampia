@@ -178,4 +178,60 @@ Notes:
 - Update certificate paths in `deploy/apache/scampia.fexhu.com-20443.conf` if needed.
 - Keep `APP_ROOT_PATH=/api` so FastAPI generates correct links/docs behind the proxy.
 
+## Docker build and run
+
+Build the image:
+
+```bash
+docker build -t scampia-api .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env scampia-api
+```
+
+Check health endpoint:
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+## Docker Compose (background)
+
+Use either `docker compose` (v2 plugin) or `docker-compose` (v1 binary).
+
+Start in background:
+
+```bash
+docker compose up -d --build
+# or
+docker-compose up -d --build
+```
+
+Follow logs:
+
+```bash
+docker compose logs -f scampia
+# or
+docker-compose logs -f scampia
+```
+
+Stop:
+
+```bash
+docker compose down
+# or
+docker-compose down
+```
+
+Helper script:
+
+```bash
+./run_debug_docker.sh up
+./run_debug_docker.sh logs
+./run_debug_docker.sh down
+```
+
 
