@@ -38,9 +38,16 @@ uniswap:
 # ── Policy defaults ──
 policy:
   max_input_per_tx: 1000000000
-  allowed_tokens_in:
-    - "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"   # USDC
-  allowed_tokens_out:
-    - "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"   # WETH
+  stop_loss_pct: 30
+  take_profit_pct: 200
+  max_open_positions: 4
+  min_eth_balance: 0.05
+  max_slippage_tolerance_pct: 20
+  max_gas_price_gwei: 35
+  authorized_tokens: {"ENS": "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72", "UNI": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"}
+  # allowed_tokens_in:
+  #   - "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"   # USDC
+  # allowed_tokens_out:
+  #   - "0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14"   # WETH
   allowed_contracts:
     - "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E"   # SwapRouter02

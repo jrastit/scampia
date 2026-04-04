@@ -71,32 +71,33 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or safe_address
-        self.policy_service.validate_trade(
-            safe_address=safe_address,
-            recipient=recipient,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=int(amount_in),
-            allowed_tokens_in=allowed_tokens_in or [],
-            allowed_tokens_out=allowed_tokens_out or [],
-            max_input_per_tx=max_input_per_tx,
-        )
+        if self.policy_service.validate_parameters():
+            self.policy_service.validate_trade(
+                safe_address=safe_address,
+                recipient=recipient,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=int(amount_in),
+                allowed_tokens_in=allowed_tokens_in or [],
+                allowed_tokens_out=allowed_tokens_out or [],
+                max_input_per_tx=max_input_per_tx,
+            )
 
-        swap = self.uniswap_service.build_swap(
-            chain_id=chain_id,
-            wallet_address=safe_address,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=amount_in,
-            slippage_bps=slippage_bps,
-        )
-        tx = self._normalize_swap_tx(swap)
+            swap = self.uniswap_service.build_swap(
+                chain_id=chain_id,
+                wallet_address=safe_address,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=amount_in,
+                slippage_bps=slippage_bps,
+            )
+            tx = self._normalize_swap_tx(swap)
 
-        return {
-            "policyCheck": {"ok": True},
-            "quoteOrSwapResponse": swap,
-            "tx": tx,
-        }
+            return {
+                "policyCheck": {"ok": True},
+                "quoteOrSwapResponse": swap,
+                "tx": tx,
+            }
 
     def prepare_safe_trade(
         self,
@@ -113,45 +114,46 @@ class TradeService:
         operation: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or safe_address
-        self.policy_service.validate_trade(
-            safe_address=safe_address,
-            recipient=recipient,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=int(amount_in),
-            allowed_tokens_in=allowed_tokens_in or [],
-            allowed_tokens_out=allowed_tokens_out or [],
-            max_input_per_tx=max_input_per_tx,
-        )
+        if self.policy_service.validate_parameters(amount_in,token_in,token_out):
+            self.policy_service.validate_trade(
+                safe_address=safe_address,
+                recipient=recipient,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=int(amount_in),
+                allowed_tokens_in=allowed_tokens_in or [],
+                allowed_tokens_out=allowed_tokens_out or [],
+                max_input_per_tx=max_input_per_tx,
+            )
 
-        swap = self.uniswap_service.build_swap(
-            chain_id=chain_id,
-            wallet_address=safe_address,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=amount_in,
-            slippage_bps=slippage_bps,
-        )
-        tx = self._normalize_swap_tx(swap)
+            swap = self.uniswap_service.build_swap(
+                chain_id=chain_id,
+                wallet_address=safe_address,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=amount_in,
+                slippage_bps=slippage_bps,
+            )
+            tx = self._normalize_swap_tx(swap)
 
-        simulation = self.simulation_service.simulate_call(
-            from_address=safe_address,
-            to=tx["to"],
-            data=tx["data"],
-            value=int(tx["value"]),
-        )
+            simulation = self.simulation_service.simulate_call(
+                from_address=safe_address,
+                to=tx["to"],
+                data=tx["data"],
+                value=int(tx["value"]),
+            )
 
-        safe_tx = self.safe_service.build_safe_tx(
-            safe_address=safe_address,
-            to=tx["to"],
-            data=tx["data"],
-            value=tx["value"],
-            operation=operation,
-        )
+            safe_tx = self.safe_service.build_safe_tx(
+                safe_address=safe_address,
+                to=tx["to"],
+                data=tx["data"],
+                value=tx["value"],
+                operation=operation,
+            )
 
-        return {
-            "policyCheck": {"ok": True},
-            "simulation": simulation,
-            "safeTx": safe_tx,
-            "rawSwap": swap,
-        }
+            return {
+                "policyCheck": {"ok": True},
+                "simulation": simulation,
+                "safeTx": safe_tx,
+                "rawSwap": swap,
+            }

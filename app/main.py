@@ -541,6 +541,13 @@ def build_trade(req: BuildTradeRequest):
 
 @app.post("/v1/trades/prepare-safe-tx")
 def prepare_safe_trade(req: BuildTradeRequest):
+    # stop_loss_pct = settings.stop_loss_pct
+    # take_profit_pct = settings.take_profit_pct
+    # max_open_positions = settings.max_open_positions
+    # min_eth_balance = settings.min_eth_balance
+    # max_slippage_tolerance_pct = settings.max_slippage_tolerance_pct
+    # max_gas_price_gwei = settings.max_gas_price_gwei
+    # authorized_tokens = settings.authorized_tokens
     try:
         return trade_service.prepare_safe_trade(
             chain_id=req.chain_id,
