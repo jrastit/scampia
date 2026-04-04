@@ -86,6 +86,10 @@ class Settings:
     # ── App ──
     app_name: str = str(_get(["app", "name"], "APP_NAME", "Scampia API"))
     app_version: str = str(_get(["app", "version"], "APP_VERSION", "0.2.0"))
+    app_host: str = str(os.getenv("APP_HOST", "0.0.0.0"))
+    app_port: int = int(os.getenv("APP_PORT", "8000"))
+    app_reload: bool = str(os.getenv("APP_RELOAD", "false")).lower() in {"1", "true", "yes", "on"}
+    app_root_path: str = str(os.getenv("APP_ROOT_PATH", "/api"))
     network: str = NETWORK
 
     # ── Chain ──
@@ -98,6 +102,16 @@ class Settings:
         os.getenv("SAFE_TX_SERVICE_BASE", str(NETWORKS[NETWORK]["safe_tx_service_base"]))
     )
     safe_api_key: str = os.getenv("SAFE_API_KEY", "")
+
+    # ── Vault ──
+    vault_address: str = str(_get(["vault", "address"], "VAULT_ADDRESS", ""))
+    vault_manager_address: str = str(
+        _get(["vault", "manager_address"], "VAULT_MANAGER_ADDRESS", str(_get(["vault", "address"], "VAULT_ADDRESS", "")))
+    )
+    vault_asset_token: str = str(
+        _get(["vault", "asset_token"], "VAULT_ASSET_TOKEN", _get(["tokens", "usdc"], "USDC_ADDRESS", ""))
+    )
+    vault_manager_fee_bps: int = int(_get(["vault", "manager_fee_bps"], "VAULT_MANAGER_FEE_BPS", 0))
 
     # ── Tokens ──
     usdc_address: str = str(

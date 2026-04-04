@@ -18,6 +18,13 @@ safe:
   address: "0x8f69DCFF0fe4aCFD048fEE81F29B76eC34773de1"
   tx_service: https://safe-transaction-sepolia.safe.global
 
+# ── Vault ──
+vault:
+  address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
+  manager_address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
+  asset_token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+  manager_fee_bps: 500
+
 # ── ENS Sepolia ──
 ens:
   registry_address: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"

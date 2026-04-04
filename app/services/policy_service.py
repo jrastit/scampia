@@ -8,7 +8,7 @@ class PolicyViolation(Exception):
 class PolicyService:
     def validate_trade(
         self,
-        safe_address: str,
+        vault_address: str,
         recipient: str,
         token_in: str,
         token_out: str,
@@ -17,8 +17,8 @@ class PolicyService:
         allowed_tokens_out: Iterable[str],
         max_input_per_tx: int,
     ) -> None:
-        if safe_address.lower() != recipient.lower():
-            raise PolicyViolation("recipient must be the Safe address")
+        if vault_address.lower() != recipient.lower():
+            raise PolicyViolation("recipient must be the Vault address")
 
         normalized_allowed_in = {t.lower() for t in allowed_tokens_in if t}
         normalized_allowed_out = {t.lower() for t in allowed_tokens_out if t}

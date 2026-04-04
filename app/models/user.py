@@ -11,6 +11,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     wallet_address = Column(String, unique=True, nullable=False, index=True)
     safe_address = Column(String, unique=True, nullable=True)
+    vault_address = Column(String, unique=True, nullable=True)
     network = Column(String, nullable=False, default="ethereum-sepolia")
     chain_id = Column(Integer, nullable=False, default=11155111)
     created_at = Column(DateTime, default=datetime.utcnow)

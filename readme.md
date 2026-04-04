@@ -65,7 +65,7 @@ The **Safe Layer** acts as the security and control middleware between the AI ag
 
 ### Import a Safe
 ```bash
-curl -X POST http://localhost:8000/v1/safes/import \
+curl -X POST https://scampia.fexhu.com:20443/api/v1/safes/import \
   -H "Content-Type: application/json" \
   -d '{
     "safe_address": "0x1234567890123456789012345678901234567890",
@@ -75,7 +75,7 @@ curl -X POST http://localhost:8000/v1/safes/import \
 
 ### Create ENS subname
 ```bash
-curl -X POST http://localhost:8000/v1/ens/subnames \
+curl -X POST https://scampia.fexhu.com:20443/api/v1/ens/subnames \
   -H "Content-Type: application/json" \
   -d '{
     "parent_name": "openclaw.eth",
@@ -86,7 +86,7 @@ curl -X POST http://localhost:8000/v1/ens/subnames \
 
 ### Set ENS records
 ```bash
-curl -X PUT http://localhost:8000/v1/ens/records \
+curl -X PUT https://scampia.fexhu.com:20443/api/v1/ens/records \
   -H "Content-Type: application/json" \
   -d '{
     "name": "alice-trader.openclaw.eth",
@@ -102,7 +102,7 @@ curl -X PUT http://localhost:8000/v1/ens/records \
 
 ### Get quote
 ```bash
-curl -X POST http://localhost:8000/v1/trades/quote \
+curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/quote \
   -H "Content-Type: application/json" \
   -d '{
     "chain_id": 8453,
@@ -116,7 +116,7 @@ curl -X POST http://localhost:8000/v1/trades/quote \
 
 ### Build trade (swap or order based on routing)
 ```bash
-curl -X POST http://localhost:8000/v1/trades/build \
+curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/build \
   -H "Content-Type: application/json" \
   -d '{
     "chain_id": 8453,
@@ -131,7 +131,7 @@ curl -X POST http://localhost:8000/v1/trades/build \
 
 ### Build Safe-ready tx (swap routes only)
 ```bash
-curl -X POST http://localhost:8000/v1/trades/prepare-safe-tx \
+curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/prepare-safe-tx \
   -H "Content-Type: application/json" \
   -d '{
     "chain_id": 8453,
@@ -142,6 +142,130 @@ curl -X POST http://localhost:8000/v1/trades/prepare-safe-tx \
     "slippage_bps": 50,
     "permit_signature": "0x..."
   }'
+```
+
+## Production deployment behind Apache
+
+Target public URL: `https://scampia.fexhu.com:20443/api`
+
+1. Start backend on private port (default 8000 in `run.sh`):
+```bash
+./run.sh
+```
+
+2. Enable Apache modules:
+```bash
+sudo a2enmod ssl proxy proxy_http headers
+```
+
+3. Install vhost config:
+```bash
+sudo cp deploy/apache/scampia.fexhu.com-20443.conf /etc/apache2/sites-available/
+sudo a2ensite scampia.fexhu.com-20443.conf
+```
+
+4. Reload Apache:
+```bash
+sudo systemctl reload apache2
+```
+
+5. Verify API through Apache:
+```bash
+curl -k https://scampia.fexhu.com:20443/api/health
+```
+
+Notes:
+- Update certificate paths in `deploy/apache/scampia.fexhu.com-20443.conf` if needed.
+- Keep `APP_ROOT_PATH=/api` so FastAPI generates correct links/docs behind the proxy.
+
+## Docker build and run
+
+Build the image:
+
+```bash
+docker build -t scampia-api .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env scampia-api
+```
+
+Check health endpoint:
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+
+## Docker Compose (background)
+
+Use either `docker compose` (v2 plugin) or `docker-compose` (v1 binary).
+
+Start in background:
+
+```bash
+docker compose up -d --build
+# or
+docker-compose up -d --build
+```
+
+Follow logs:
+
+```bash
+docker compose logs -f scampia
+# or
+docker-compose logs -f scampia
+```
+
+Stop:
+
+```bash
+docker compose down
+# or
+docker-compose down
+```
+
+Helper script:
+
+```bash
+./run_debug_docker.sh up
+./run_debug_docker.sh logs
+./run_debug_docker.sh down
+```
+
+## Vault contract deployment and ABI export
+
+Export ABI + bytecode:
+
+```bash
+python3 scripts/export_abi.py
+```
+
+Deploy the singleton multi-vault contract:
+
+```bash
+export RPC_URL="https://..."
+export BACKEND_PRIVATE_KEY="0x..."
+export VAULT_ASSET_TOKEN="0x..."
+export VAULT_MANAGER_RECIPIENT="0x..."
+export VAULT_MANAGER_FEE_BPS="500"
+python3 scripts/deploy_vault.py
+```
+
+One-shot export + deploy:
+
+```bash
+bash scripts/deploy_and_export.sh
+```
+
+## Solidity unit tests (Foundry)
+
+Install Foundry if needed, then:
+
+```bash
+forge install foundry-rs/forge-std --no-commit
+forge test
 ```
 
 

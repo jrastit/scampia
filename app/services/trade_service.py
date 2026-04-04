@@ -3,15 +3,17 @@ from typing import Any, Dict, Iterable, Optional
 from app.data import user_data
 
 try:
+    from app.config import settings
     from app.services.policy_service import PolicyService
-    from app.services.safe_service import SafeService
     from app.services.simulation_service import SimulationService
     from app.services.uniswap_service import UniswapService
+    from app.services.vault_service import VaultService
 except ImportError:
+    from config import settings
     from policy_service import PolicyService
-    from safe_service import SafeService
     from simulation_service import SimulationService
     from uniswap_service import UniswapService
+    from vault_service import VaultService
 
 
 class TradeService:
@@ -20,12 +22,12 @@ class TradeService:
         uniswap_service: UniswapService,
         policy_service: PolicyService,
         simulation_service: SimulationService,
-        safe_service: SafeService,
+        vault_service: VaultService,
     ):
         self.uniswap_service = uniswap_service
         self.policy_service = policy_service
         self.simulation_service = simulation_service
-        self.safe_service = safe_service
+        self.vault_service = vault_service
 
     @staticmethod
     def _normalize_swap_tx(swap: Dict[str, Any]) -> Dict[str, str]:
@@ -59,7 +61,7 @@ class TradeService:
     def quote_trade(
         self,
         chain_id: int,
-        safe_address: str,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -67,7 +69,7 @@ class TradeService:
     ) -> Dict[str, Any]:
         return self.uniswap_service.get_quote(
             chain_id=chain_id,
-            wallet_address=safe_address,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
@@ -77,7 +79,7 @@ class TradeService:
     def build_trade(
         self,
         chain_id: int,
-        safe_address: str,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -88,10 +90,10 @@ class TradeService:
         allowed_tokens_out: Optional[Iterable[str]] = None,
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
-        recipient = recipient or safe_address
+        recipient = recipient or wallet_address
         if self.policy_service.validate_parameters():
             self.policy_service.validate_trade(
-                safe_address=safe_address,
+                safe_address=wallet_address,
                 recipient=recipient,
                 token_in=token_in,
                 token_out=token_out,
@@ -103,7 +105,7 @@ class TradeService:
 
             swap = self.uniswap_service.build_swap(
                 chain_id=chain_id,
-                wallet_address=safe_address,
+                wallet_address=wallet_address,
                 token_in=token_in,
                 token_out=token_out,
                 amount_in=amount_in,
@@ -112,7 +114,7 @@ class TradeService:
             tx = self._normalize_swap_tx(swap)
         quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
-            wallet_address=safe_address,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
@@ -155,10 +157,11 @@ class TradeService:
                 "tx": tx,
             }
 
-    def prepare_safe_trade(
+    def prepare_vault_trade(
         self,
         chain_id: int,
-        safe_address: str,
+        vault_id: int,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -169,12 +172,11 @@ class TradeService:
         allowed_tokens_in: Optional[Iterable[str]] = None,
         allowed_tokens_out: Optional[Iterable[str]] = None,
         max_input_per_tx: int = 0,
-        operation: int = 0,
     ) -> Dict[str, Any]:
-        recipient = recipient or safe_address
+        recipient = recipient or wallet_address
         if self.policy_service.validate_parameters(amount_in,token_in,token_out):
             self.policy_service.validate_trade(
-                safe_address=safe_address,
+                safe_address=wallet_address,
                 recipient=recipient,
                 token_in=token_in,
                 token_out=token_out,
@@ -184,34 +186,97 @@ class TradeService:
                 max_input_per_tx=max_input_per_tx,
             )
 
-            swap = self.uniswap_service.build_swap(
-                chain_id=chain_id,
-                wallet_address=safe_address,
-                token_in=token_in,
-                token_out=token_out,
-                amount_in=amount_in,
-                slippage_bps=slippage_bps,
-            )
-            tx = self._normalize_swap_tx(swap)
+        quote_response = self.uniswap_service.get_quote(
+            chain_id=chain_id,
+            wallet_address=wallet_address,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+        )
+        routing = str(quote_response.get("routing") or "")
+        quote = quote_response.get("quote")
+        permit_data = quote_response.get("permitData")
 
-            simulation = self.simulation_service.simulate_call(
-                from_address=safe_address,
-                to=tx["to"],
-                data=tx["data"],
-                value=int(tx["value"]),
-            )
+        if not isinstance(quote, dict):
+            raise ValueError("quote response missing quote payload")
 
-            safe_tx = self.safe_service.build_safe_tx(
-                safe_address=safe_address,
-                to=tx["to"],
-                data=tx["data"],
-                value=tx["value"],
-                operation=operation,
-            )
-            user_data.increment_active_transactions(user_id)
-            return {
-                "policyCheck": {"ok": True},
-                "simulation": simulation,
-                "safeTx": safe_tx,
-                "rawSwap": swap,
-            }
+        route_family = self._route_family(routing)
+        if route_family != "swap":
+            raise ValueError("prepare-safe-tx only supports swap routes (CLASSIC/WRAP/UNWRAP/BRIDGE)")
+
+        if permit_data is not None and not permit_signature:
+            raise ValueError("permit signature required for this quote")
+
+        swap = self.uniswap_service.build_swap(
+            quote=quote,
+            signature=permit_signature,
+            permit_data=permit_data if isinstance(permit_data, dict) else None,
+        )
+        tx = self._normalize_swap_tx(swap)
+
+        simulation = self.simulation_service.simulate_call(
+            from_address=wallet_address,
+            to=tx["to"],
+            data=tx["data"],
+            value=int(tx["value"]),
+        )
+
+        vault_tx = self.vault_service.build_agent_swap_tx(
+            vault_id=vault_id,
+            target=tx["to"],
+            data=tx["data"],
+            min_asset_delta=0,
+            value=int(tx["value"]),
+        )
+
+        return {
+            "policyCheck": {"ok": True},
+            "quoteResponse": quote_response,
+            "simulation": simulation,
+            "vaultTx": vault_tx,
+            "swapResponse": swap,
+            "routing": routing,
+        }
+
+    def prepare_safe_trade(self, *args, **kwargs) -> Dict[str, Any]:
+        return self.prepare_vault_trade(*args, **kwargs)
+
+    def execute_vault_swap(
+        self,
+        chain_id: int,
+        vault_id: int,
+        token_in: str,
+        token_out: str,
+        amount_in: str,
+        slippage_bps: int = 50,
+        permit_signature: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        _ = chain_id
+        wallet_address = settings.vault_manager_address
+        if not wallet_address:
+            raise ValueError("VAULT_MANAGER_ADDRESS required")
+        prepared = self.prepare_vault_trade(
+            chain_id=chain_id,
+            vault_id=vault_id,
+            wallet_address=wallet_address,
+            token_in=token_in,
+            token_out=token_out,
+            amount_in=amount_in,
+            slippage_bps=slippage_bps,
+            permit_signature=permit_signature,
+            recipient=wallet_address,
+        )
+        tx = prepared["swapResponse"]
+        normalized = self._normalize_swap_tx(tx)
+        execution = self.vault_service.execute_agent_swap(
+            vault_id=vault_id,
+            target=normalized["to"],
+            data=normalized["data"],
+            min_asset_delta=0,
+            value=int(normalized["value"]),
+        )
+        return {
+            "prepared": prepared,
+            "execution": execution,
+        }
