@@ -60,7 +60,7 @@ class PolicyService:
         authorized_tokens = settings.authorized_tokens
         is_using_authorized_token = False
         for tokens in authorized_tokens:
-            if token_in == tokens or token_out == tokens:
+            if token_in == authorized_tokens[tokens] or token_out == authorized_tokens[tokens]:
                 is_using_authorized_token = True
         if is_using_authorized_token == False:
             return False
