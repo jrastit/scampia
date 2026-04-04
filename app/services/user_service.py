@@ -23,9 +23,9 @@ class UserService:
                 "created_at": str(existing.created_at),
             }
 
-        configured_vault = settings.vault_address
+        configured_vault = settings.vault_manager_address or settings.vault_address
         if not configured_vault:
-            raise ValueError("VAULT_ADDRESS required to connect wallet")
+            raise ValueError("VAULT_MANAGER_ADDRESS required to connect wallet")
 
         user = user_data.create_user(
             db=db,

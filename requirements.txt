@@ -9,3 +9,6 @@ safe-eth-py
 python-dotenv
 pyyaml
 sqlalchemy
+py-solc-x
+pytest
+httpx

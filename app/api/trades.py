@@ -19,7 +19,7 @@ def build_router(trade_service, settings) -> APIRouter:
             wallet_address = req.resolve_wallet_address()
             return trade_service.quote_trade(
                 chain_id=req.chain_id,
-                vault_address=wallet_address,
+                wallet_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -34,7 +34,7 @@ def build_router(trade_service, settings) -> APIRouter:
             wallet_address = req.resolve_wallet_address()
             return trade_service.build_trade(
                 chain_id=req.chain_id,
-                vault_address=wallet_address,
+                wallet_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -54,9 +54,11 @@ def build_router(trade_service, settings) -> APIRouter:
     def prepare_vault_trade(req: BuildTradeRequest):
         try:
             wallet_address = req.resolve_wallet_address()
+            vault_id = req.require_vault_id()
             return trade_service.prepare_vault_trade(
                 chain_id=req.chain_id,
-                vault_address=wallet_address,
+                vault_id=vault_id,
+                wallet_address=wallet_address,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,
@@ -81,10 +83,10 @@ def build_router(trade_service, settings) -> APIRouter:
     @router.post("/execute-vault-swap")
     def execute_vault_swap(req: BuildTradeRequest):
         try:
-            wallet_address = req.resolve_wallet_address()
+            vault_id = req.require_vault_id()
             return trade_service.execute_vault_swap(
                 chain_id=req.chain_id,
-                vault_address=wallet_address,
+                vault_id=vault_id,
                 token_in=req.token_in,
                 token_out=req.token_out,
                 amount_in=req.amount_in,

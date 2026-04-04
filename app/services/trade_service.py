@@ -1,11 +1,13 @@
 from typing import Any, Dict, Iterable, Optional
 
 try:
+    from app.config import settings
     from app.services.policy_service import PolicyService
     from app.services.simulation_service import SimulationService
     from app.services.uniswap_service import UniswapService
     from app.services.vault_service import VaultService
 except ImportError:
+    from config import settings
     from policy_service import PolicyService
     from simulation_service import SimulationService
     from uniswap_service import UniswapService
@@ -57,7 +59,7 @@ class TradeService:
     def quote_trade(
         self,
         chain_id: int,
-        vault_address: str,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -65,7 +67,7 @@ class TradeService:
     ) -> Dict[str, Any]:
         return self.uniswap_service.get_quote(
             chain_id=chain_id,
-            wallet_address=vault_address,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
@@ -75,7 +77,7 @@ class TradeService:
     def build_trade(
         self,
         chain_id: int,
-        vault_address: str,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -86,9 +88,9 @@ class TradeService:
         allowed_tokens_out: Optional[Iterable[str]] = None,
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
-        recipient = recipient or vault_address
+        recipient = recipient or wallet_address
         self.policy_service.validate_trade(
-            vault_address=vault_address,
+            vault_address=wallet_address,
             recipient=recipient,
             token_in=token_in,
             token_out=token_out,
@@ -100,7 +102,7 @@ class TradeService:
 
         quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
-            wallet_address=vault_address,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
@@ -148,7 +150,8 @@ class TradeService:
     def prepare_vault_trade(
         self,
         chain_id: int,
-        vault_address: str,
+        vault_id: int,
+        wallet_address: str,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -159,9 +162,9 @@ class TradeService:
         allowed_tokens_out: Optional[Iterable[str]] = None,
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
-        recipient = recipient or vault_address
+        recipient = recipient or wallet_address
         self.policy_service.validate_trade(
-            vault_address=vault_address,
+            vault_address=wallet_address,
             recipient=recipient,
             token_in=token_in,
             token_out=token_out,
@@ -173,7 +176,7 @@ class TradeService:
 
         quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
-            wallet_address=vault_address,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
@@ -201,18 +204,17 @@ class TradeService:
         tx = self._normalize_swap_tx(swap)
 
         simulation = self.simulation_service.simulate_call(
-            from_address=vault_address,
+            from_address=wallet_address,
             to=tx["to"],
             data=tx["data"],
             value=int(tx["value"]),
         )
 
         vault_tx = self.vault_service.build_agent_swap_tx(
-            vault_address=vault_address,
+            vault_id=vault_id,
             target=tx["to"],
             data=tx["data"],
-            token_out=token_out,
-            min_token_out=0,
+            min_asset_delta=0,
             value=int(tx["value"]),
         )
 
@@ -231,7 +233,7 @@ class TradeService:
     def execute_vault_swap(
         self,
         chain_id: int,
-        vault_address: str,
+        vault_id: int,
         token_in: str,
         token_out: str,
         amount_in: str,
@@ -239,24 +241,27 @@ class TradeService:
         permit_signature: Optional[str] = None,
     ) -> Dict[str, Any]:
         _ = chain_id
+        wallet_address = settings.vault_manager_address
+        if not wallet_address:
+            raise ValueError("VAULT_MANAGER_ADDRESS required")
         prepared = self.prepare_vault_trade(
             chain_id=chain_id,
-            vault_address=vault_address,
+            vault_id=vault_id,
+            wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
             slippage_bps=slippage_bps,
             permit_signature=permit_signature,
-            recipient=vault_address,
+            recipient=wallet_address,
         )
         tx = prepared["swapResponse"]
         normalized = self._normalize_swap_tx(tx)
         execution = self.vault_service.execute_agent_swap(
-            vault_address=vault_address,
+            vault_id=vault_id,
             target=normalized["to"],
             data=normalized["data"],
-            token_out=token_out,
-            min_token_out=0,
+            min_asset_delta=0,
             value=int(normalized["value"]),
         )
         return {

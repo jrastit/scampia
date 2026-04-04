@@ -39,14 +39,15 @@ class UniswapQuoteRequest(BaseModel):
     slippage_bps: int = 50
 
     def resolve_wallet_address(self) -> str:
-        addr = self.vault_address or self.safe_address
+        addr = self.vault_address or self.safe_address or settings.vault_manager_address
         if not addr:
-            raise ValueError("vault_address is required")
+            raise ValueError("vault_manager_address is required")
         return addr
 
 
 class BuildTradeRequest(BaseModel):
     chain_id: int
+    vault_id: Optional[int] = None
     vault_address: Optional[str] = None
     safe_address: Optional[str] = None
     token_in: str
@@ -57,10 +58,15 @@ class BuildTradeRequest(BaseModel):
     recipient: Optional[str] = None
 
     def resolve_wallet_address(self) -> str:
-        addr = self.vault_address or self.safe_address
+        addr = self.vault_address or self.safe_address or settings.vault_manager_address
         if not addr:
-            raise ValueError("vault_address is required")
+            raise ValueError("vault_manager_address is required")
         return addr
+
+    def require_vault_id(self) -> int:
+        if self.vault_id is None:
+            raise ValueError("vault_id is required")
+        return self.vault_id
 
 
 class SafeBuildTxRequest(BaseModel):

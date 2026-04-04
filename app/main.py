@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 try:
     from app.api.ens import build_router as build_ens_router
     from app.api.health import build_router as build_health_router
-    from app.api.safes import build_router as build_safes_router
+    from app.api.vaults import build_router as build_vaults_router
     from app.api.trades import build_router as build_trades_router
     from app.api.users import build_router as build_users_router
     from app.config import settings
@@ -18,7 +18,7 @@ try:
 except ImportError:
     from api.ens import build_router as build_ens_router
     from api.health import build_router as build_health_router
-    from api.safes import build_router as build_safes_router
+    from api.vaults import build_router as build_vaults_router
     from api.trades import build_router as build_trades_router
     from api.users import build_router as build_users_router
     from config import settings
@@ -65,6 +65,6 @@ user_service = UserService(vault_service=vault_service)
 
 app.include_router(build_health_router(settings))
 app.include_router(build_users_router(user_service, get_db))
-app.include_router(build_safes_router(vault_service))
+app.include_router(build_vaults_router(vault_service))
 app.include_router(build_ens_router(ens_service, vault_service, settings))
 app.include_router(build_trades_router(trade_service, settings))

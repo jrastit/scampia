@@ -234,4 +234,38 @@ Helper script:
 ./run_debug_docker.sh down
 ```
 
+## Vault contract deployment and ABI export
+
+Export ABI + bytecode:
+
+```bash
+python3 scripts/export_abi.py
+```
+
+Deploy the singleton multi-vault contract:
+
+```bash
+export RPC_URL="https://..."
+export BACKEND_PRIVATE_KEY="0x..."
+export VAULT_ASSET_TOKEN="0x..."
+export VAULT_MANAGER_RECIPIENT="0x..."
+export VAULT_MANAGER_FEE_BPS="500"
+python3 scripts/deploy_vault.py
+```
+
+One-shot export + deploy:
+
+```bash
+bash scripts/deploy_and_export.sh
+```
+
+## Solidity unit tests (Foundry)
+
+Install Foundry if needed, then:
+
+```bash
+forge install foundry-rs/forge-std --no-commit
+forge test
+```
+
 

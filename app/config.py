@@ -105,9 +105,13 @@ class Settings:
 
     # ── Vault ──
     vault_address: str = str(_get(["vault", "address"], "VAULT_ADDRESS", ""))
+    vault_manager_address: str = str(
+        _get(["vault", "manager_address"], "VAULT_MANAGER_ADDRESS", str(_get(["vault", "address"], "VAULT_ADDRESS", "")))
+    )
     vault_asset_token: str = str(
         _get(["vault", "asset_token"], "VAULT_ASSET_TOKEN", _get(["tokens", "usdc"], "USDC_ADDRESS", ""))
     )
+    vault_manager_fee_bps: int = int(_get(["vault", "manager_fee_bps"], "VAULT_MANAGER_FEE_BPS", 0))
 
     # ── Tokens ──
     usdc_address: str = str(
