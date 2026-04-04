@@ -35,6 +35,7 @@ except ImportError:
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
+    root_path=settings.app_root_path,
     openapi_url="/v1/openapi.json",
     docs_url="/v1/docs",
     redoc_url="/v1/redoc",

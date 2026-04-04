@@ -86,6 +86,10 @@ class Settings:
     # ── App ──
     app_name: str = str(_get(["app", "name"], "APP_NAME", "Scampia API"))
     app_version: str = str(_get(["app", "version"], "APP_VERSION", "0.2.0"))
+    app_host: str = str(os.getenv("APP_HOST", "0.0.0.0"))
+    app_port: int = int(os.getenv("APP_PORT", "8000"))
+    app_reload: bool = str(os.getenv("APP_RELOAD", "false")).lower() in {"1", "true", "yes", "on"}
+    app_root_path: str = str(os.getenv("APP_ROOT_PATH", "/api"))
     network: str = NETWORK
 
     # ── Chain ──
