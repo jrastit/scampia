@@ -8,3 +8,4 @@ eth-utils
 safe-eth-py
 dotenv
 pyyaml
+sqlalchemy

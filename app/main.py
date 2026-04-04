@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 try:
     from app.config import settings
+    from app.data import get_db, init_db
     from app.schemas import (
         BuildTradeRequest,
         CreateEnsSubnameRequest,
@@ -18,8 +20,10 @@ try:
     from app.services.simulation_service import SimulationError, SimulationService
     from app.services.trade_service import TradeService
     from app.services.uniswap_service import UniswapService
+    from app.services.user_service import UserService
 except ImportError:
     from config import settings
+    from data import get_db, init_db
     from schemas import (
         BuildTradeRequest,
         CreateEnsSubnameRequest,
@@ -35,9 +39,12 @@ except ImportError:
     from simulation_service import SimulationError, SimulationService
     from trade_service import TradeService
     from uniswap_service import UniswapService
+    from user_service import UserService
 
 
 app = FastAPI(title="Scampia API", version="0.2.0")
+
+init_db()
 
 ens_service = ENSService()
 safe_service = SafeService()
@@ -50,6 +57,7 @@ trade_service = TradeService(
     simulation_service=simulation_service,
     safe_service=safe_service,
 )
+user_service = UserService(safe_service=safe_service)
 
 
 class SetReverseEnsRequest(BaseModel):
@@ -74,6 +82,15 @@ class PrepareEnsSubnameSafeTxRequest(BaseModel):
     operation: int = 0
 
 
+class DeploySafeRequest(BaseModel):
+    owner_address: str
+    threshold: int = 1
+
+
+class ConnectWalletRequest(BaseModel):
+    wallet_address: str
+
+
 @app.get("/health")
 def health():
     return {
@@ -86,6 +103,42 @@ def health():
     }
 
 
+# Users
+
+@app.post("/v1/users/connect")
+def connect_wallet(req: ConnectWalletRequest, db: Session = Depends(get_db)):
+    try:
+        return user_service.connect_wallet(db, req.wallet_address)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/users/{wallet_address}")
+def get_user(wallet_address: str, db: Session = Depends(get_db)):
+    user = user_service.get_user(db, wallet_address)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@app.get("/v1/users")
+def list_users(db: Session = Depends(get_db)):
+    return user_service.get_all_users(db)
+
+
+# Safe
+
+@app.post("/v1/safes/deploy")
+def deploy_safe(req: DeploySafeRequest):
+    try:
+        return safe_service.deploy_safe(
+            owner_address=req.owner_address,
+            threshold=req.threshold,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/v1/safes/import")
 def import_safe(req: ImportSafeRequest):
     return safe_service.import_safe(req.safe_address, req.chain_id)
@@ -95,6 +148,47 @@ def import_safe(req: ImportSafeRequest):
 def get_safe_info(safe_address: str):
     try:
         return safe_service.get_safe_info(safe_address)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/safes/{safe_address}/balances")
+def get_safe_balances(safe_address: str):
+    try:
+        return safe_service.get_all_balances(safe_address)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/safes/{safe_address}/balance/{token_address}")
+def get_token_balance(safe_address: str, token_address: str):
+    try:
+        balance = safe_service.get_token_balance(safe_address, token_address)
+        decimals = safe_service.get_token_decimals(token_address)
+        symbol = safe_service.get_token_symbol(token_address)
+        return {
+            "token": token_address,
+            "symbol": symbol,
+            "balance_raw": balance,
+            "balance_human": balance / (10 ** decimals),
+            "decimals": decimals,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/safes/{safe_address}/owners")
+def get_safe_owners(safe_address: str):
+    try:
+        return {"safeAddress": safe_address, "owners": safe_service.get_owners(safe_address)}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/v1/safes/{safe_address}/owners/{address}/check")
+def check_is_owner(safe_address: str, address: str):
+    try:
+        return {"address": address, "isOwner": safe_service.is_owner(safe_address, address)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -123,6 +217,8 @@ def execute_direct(req: ExecuteSafeTxRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
+# ENS
 
 @app.post("/v1/ens/reverse")
 def set_reverse_ens(req: SetReverseEnsRequest):
@@ -221,6 +317,8 @@ def get_ens_profile(name: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# Trades
+
 @app.post("/v1/trades/quote")
 def get_trade_quote(req: UniswapQuoteRequest):
     try:
@@ -279,29 +377,3 @@ def prepare_safe_trade(req: BuildTradeRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/v1/safes/{safe_address}/balances")
-def get_safe_balances(safe_address: str):
-    try:
-        return safe_service.get_all_balances(safe_address)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/v1/safes/{safe_address}/balance/{token_address}")
-def get_token_balance(safe_address: str, token_address: str):
-    try:
-        balance = safe_service.get_token_balance(safe_address, token_address)
-        decimals = safe_service.get_token_decimals(token_address)
-        symbol = safe_service.get_token_symbol(token_address)
-        return {
-            "token": token_address,
-            "symbol": symbol,
-            "balance_raw": balance,
-            "balance_human": balance / (10 ** decimals),
-            "decimals": decimals,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-

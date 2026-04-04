@@ -1,3 +1,4 @@
+import time
 from typing import Any, Dict, Optional
 
 import requests
@@ -83,6 +84,59 @@ SAFE_ABI = [
         "inputs": [],
         "name": "nonce",
         "outputs": [{"name": "", "type": "uint256"}],
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "getOwners",
+        "outputs": [{"name": "", "type": "address[]"}],
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "getThreshold",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "type": "function",
+    },
+    {
+        "inputs": [{"name": "owner", "type": "address"}],
+        "name": "isOwner",
+        "outputs": [{"name": "", "type": "bool"}],
+        "type": "function",
+    },
+]
+
+SAFE_SINGLETON = "0xd9Db270c1B5E3Bd161E8c8503c55cEABeE709552"
+PROXY_FACTORY = "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2"
+FALLBACK_HANDLER = "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4"
+
+SAFE_SETUP_ABI = [
+    {
+        "inputs": [
+            {"name": "_owners", "type": "address[]"},
+            {"name": "_threshold", "type": "uint256"},
+            {"name": "to", "type": "address"},
+            {"name": "data", "type": "bytes"},
+            {"name": "fallbackHandler", "type": "address"},
+            {"name": "paymentToken", "type": "address"},
+            {"name": "payment", "type": "uint256"},
+            {"name": "paymentReceiver", "type": "address"},
+        ],
+        "name": "setup",
+        "outputs": [],
+        "type": "function",
+    },
+]
+
+PROXY_FACTORY_ABI = [
+    {
+        "inputs": [
+            {"name": "_singleton", "type": "address"},
+            {"name": "initializer", "type": "bytes"},
+            {"name": "saltNonce", "type": "uint256"},
+        ],
+        "name": "createProxyWithNonce",
+        "outputs": [{"name": "proxy", "type": "address"}],
         "type": "function",
     },
 ]
@@ -206,6 +260,88 @@ class SafeService:
         except Exception:
             info["balances"] = {}
         return info
+
+    # Owners
+
+    def get_owners(self, safe_address: str) -> list[str]:
+        contract = self.w3.eth.contract(
+            address=self._checksum(safe_address), abi=SAFE_ABI,
+        )
+        return contract.functions.getOwners().call()
+
+    def is_owner(self, safe_address: str, address: str) -> bool:
+        contract = self.w3.eth.contract(
+            address=self._checksum(safe_address), abi=SAFE_ABI,
+        )
+        return contract.functions.isOwner(self._checksum(address)).call()
+
+    # Deploy
+
+    def deploy_safe(self, owner_address: str, threshold: int = 1) -> Dict[str, Any]:
+        if not self.backend_account:
+            raise ValueError("BACKEND_PRIVATE_KEY required")
+
+        owner = self._checksum(owner_address)
+        zero = "0x0000000000000000000000000000000000000000"
+
+        safe_contract = self.w3.eth.contract(abi=SAFE_SETUP_ABI)
+        initializer = safe_contract.encode_abi("setup", args=[
+            [owner],
+            threshold,
+            self._checksum(zero),
+            b"",
+            self._checksum(FALLBACK_HANDLER),
+            self._checksum(zero),
+            0,
+            self._checksum(zero),
+        ])
+
+        factory = self.w3.eth.contract(
+            address=self._checksum(PROXY_FACTORY),
+            abi=PROXY_FACTORY_ABI,
+        )
+
+        salt = int(time.time() * 1000)
+
+        tx = factory.functions.createProxyWithNonce(
+            self._checksum(SAFE_SINGLETON),
+            bytes.fromhex(initializer[2:]),
+            salt,
+        ).build_transaction({
+            "chainId": settings.chain_id,
+            "from": self.backend_account.address,
+            "nonce": self.w3.eth.get_transaction_count(self.backend_account.address),
+            "gas": 500_000,
+            "gasPrice": self.w3.eth.gas_price,
+        })
+
+        signed = self.backend_account.sign_transaction(tx)
+        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+        if receipt.status != 1:
+            raise ValueError(f"Safe deployment tx reverted: {self.w3.to_hex(tx_hash)}")
+
+        safe_address = None
+        factory_addr = self._checksum(PROXY_FACTORY).lower()
+        known = {factory_addr, self.backend_account.address.lower()}
+        for log in receipt.logs:
+            addr = self._checksum(log.address)
+            if addr.lower() not in known:
+                safe_address = addr
+                break
+
+        if not safe_address:
+            raise ValueError("Safe deployment failed")
+
+        return {
+            "safeAddress": safe_address,
+            "owner": owner,
+            "threshold": threshold,
+            "txHash": self.w3.to_hex(tx_hash),
+            "network": settings.network,
+            "chainId": settings.chain_id,
+        }
 
     # Transaction building
 
