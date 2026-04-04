@@ -121,6 +121,19 @@ class ConnectWalletRequest(BaseModel):
     wallet_address: str
 
 
+class WithdrawEthRequest(BaseModel):
+    safe_address: str
+    to: str
+    amount: str
+
+
+class WithdrawTokenRequest(BaseModel):
+    safe_address: str
+    to: str
+    token_address: str
+    amount: str
+
+
 @app.get("/health")
 def health():
     return {
@@ -243,6 +256,58 @@ def execute_direct(req: ExecuteSafeTxRequest):
             data=req.data,
             value=int(req.value),
             operation=req.operation,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Withdraw
+
+@app.post("/v1/safes/withdraw/eth/build")
+def build_withdraw_eth(req: WithdrawEthRequest):
+    try:
+        return safe_service.build_withdraw_eth(
+            safe_address=req.safe_address,
+            to=req.to,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/eth/execute")
+def execute_withdraw_eth(req: WithdrawEthRequest):
+    try:
+        return safe_service.withdraw_eth(
+            safe_address=req.safe_address,
+            to=req.to,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/token/build")
+def build_withdraw_token(req: WithdrawTokenRequest):
+    try:
+        return safe_service.build_withdraw_token(
+            safe_address=req.safe_address,
+            to=req.to,
+            token_address=req.token_address,
+            amount=int(req.amount),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/v1/safes/withdraw/token/execute")
+def execute_withdraw_token(req: WithdrawTokenRequest):
+    try:
+        return safe_service.withdraw_token(
+            safe_address=req.safe_address,
+            to=req.to,
+            token_address=req.token_address,
+            amount=int(req.amount),
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

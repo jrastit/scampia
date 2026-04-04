@@ -43,6 +43,16 @@ ERC20_ABI = [
         "outputs": [{"name": "", "type": "uint256"}],
         "type": "function",
     },
+    {
+        "constant": False,
+        "inputs": [
+            {"name": "to", "type": "address"},
+            {"name": "value", "type": "uint256"},
+        ],
+        "name": "transfer",
+        "outputs": [{"name": "", "type": "bool"}],
+        "type": "function",
+    },
 ]
 
 SAFE_ABI = [
@@ -343,6 +353,80 @@ class SafeService:
             "chainId": settings.chain_id,
         }
 
+    # Withdraw
+
+    def build_withdraw_eth(self, safe_address: str, to: str, amount: int) -> Dict[str, Any]:
+        balance = self.get_eth_balance(safe_address)
+        if balance < amount:
+            raise ValueError(f"Safe has {balance} wei but tried to withdraw {amount}")
+
+        return self.build_safe_tx(
+            safe_address=safe_address,
+            to=to,
+            data="0x",
+            value=str(amount),
+            operation=0,
+        )
+
+    def withdraw_eth(self, safe_address: str, to: str, amount: int) -> Dict[str, Any]:
+        balance = self.get_eth_balance(safe_address)
+        if balance < amount:
+            raise ValueError(f"Safe has {balance} wei but tried to withdraw {amount}")
+
+        return self.execute_safe_tx(
+            safe_address=safe_address,
+            to=to,
+            data="0x",
+            value=amount,
+            operation=0,
+        )
+
+    def build_withdraw_token(
+        self, safe_address: str, to: str, token_address: str, amount: int
+    ) -> Dict[str, Any]:
+        balance = self.get_token_balance(safe_address, token_address)
+        if balance < amount:
+            raise ValueError(f"Safe has {balance} but tried to withdraw {amount}")
+
+        contract = self.w3.eth.contract(
+            address=self._checksum(token_address), abi=ERC20_ABI,
+        )
+        calldata = contract.encode_abi("transfer", args=[
+            self._checksum(to),
+            amount,
+        ])
+
+        return self.build_safe_tx(
+            safe_address=safe_address,
+            to=token_address,
+            data=calldata,
+            value="0",
+            operation=0,
+        )
+
+    def withdraw_token(
+        self, safe_address: str, to: str, token_address: str, amount: int
+    ) -> Dict[str, Any]:
+        balance = self.get_token_balance(safe_address, token_address)
+        if balance < amount:
+            raise ValueError(f"Safe has {balance} but tried to withdraw {amount}")
+
+        contract = self.w3.eth.contract(
+            address=self._checksum(token_address), abi=ERC20_ABI,
+        )
+        calldata = contract.encode_abi("transfer", args=[
+            self._checksum(to),
+            amount,
+        ])
+
+        return self.execute_safe_tx(
+            safe_address=safe_address,
+            to=token_address,
+            data=calldata,
+            value=0,
+            operation=0,
+        )
+
     # Transaction building
 
     def _get_safe_nonce(self, safe_address: str) -> int:
@@ -441,7 +525,7 @@ class SafeService:
             nonce,
         ).call()
 
-        signature = self.backend_account.signHash(safe_tx_hash)
+        signature = self.backend_account.unsafe_sign_hash(safe_tx_hash)
         sig_bytes = (
             signature.r.to_bytes(32, "big")
             + signature.s.to_bytes(32, "big")
