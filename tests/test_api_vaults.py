@@ -12,6 +12,34 @@ class VaultServiceStub:
         self.calls.append(("import_vault", vault_address, chain_id))
         return {"managerAddress": vault_address, "chainId": chain_id}
 
+    def list_vaults(self):
+        self.calls.append(("list_vaults",))
+        return {
+            "items": [
+                {
+                    "vault_id": 12,
+                    "owner": "0xowner",
+                    "owner_fee_bps": 300,
+                    "asset_token": "0xasset",
+                    "total_assets": "123",
+                    "total_shares": "120",
+                }
+            ]
+        }
+
+    def get_vault_details(self, vault_id: int):
+        self.calls.append(("get_vault_details", vault_id))
+        return {
+            "vault_id": vault_id,
+            "owner": "0xowner",
+            "owner_fee_bps": 300,
+            "manager_fee_bps": 200,
+            "asset_token": "0xasset",
+            "total_assets": "123",
+            "total_shares": "120",
+            "created_at": "2026-04-05T12:00:00Z",
+        }
+
     def get_all_balances(self):
         return {"USDC": {"balance": 123, "decimals": 6, "symbol": "USDC"}}
 
@@ -95,3 +123,40 @@ def test_token_balance_endpoint() -> None:
     assert body["balance_raw"] == 42
     assert body["decimals"] == 6
     assert body["symbol"] == "USDC"
+
+
+def test_balances_endpoint_not_captured_by_vault_id_route() -> None:
+    client, stub = _client()
+
+    response = client.get("/v1/vaults/balances")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "USDC" in body
+    assert body["USDC"]["balance"] == 123
+    assert not any(call[0] == "get_vault_details" for call in stub.calls)
+
+
+def test_list_vaults_endpoint() -> None:
+    client, stub = _client()
+
+    response = client.get("/v1/vaults")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["items"][0]["vault_id"] == 12
+    assert ("list_vaults",) in stub.calls
+
+
+def test_get_vault_details_endpoint() -> None:
+    client, stub = _client()
+
+    response = client.get("/v1/vaults/12")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["vault_id"] == 12
+    assert body["manager_fee_bps"] == 200
+    assert body["created_at"] == "2026-04-05T12:00:00Z"
+    assert ("get_vault_details", 12) in stub.calls

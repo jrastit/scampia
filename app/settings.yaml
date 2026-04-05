@@ -46,14 +46,15 @@ safe:
 
 # ── Vault ──
 vault:
-  address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
-  manager_address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
+  address: "0x793BC35Aa2045D0d4779b11e60e02DDA10Dc7037"
+  manager_address: "0x793BC35Aa2045D0d4779b11e60e02DDA10Dc7037"
   asset_token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   manager_fee_bps: 500
 
 # ── ENS Sepolia ──
 ens:
   registry_address: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
+  manager_address: ""
   reverse_registrar_address: "0xA0a1AbcDAe1a2a4A2EF8e9113Ff0e02DD81DC0C6"
   public_resolver_address: "0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5"
 

@@ -3,16 +3,24 @@ from fastapi import APIRouter, HTTPException
 try:
     from app.schemas import (
         BuildVaultEnsPolicyTxRequest,
+        EnsConfigResponse,
+        EnsProfileResponse,
+        EnsWriteResponse,
         RegisterVaultEnsRequest,
         SetEnsConfigRequest,
+        VaultEnsProfileResponse,
         VaultEnsPolicyUpdateRequest,
     )
     from app.services.ens_service import namehash
 except ImportError:
     from schemas import (
         BuildVaultEnsPolicyTxRequest,
+        EnsConfigResponse,
+        EnsProfileResponse,
+        EnsWriteResponse,
         RegisterVaultEnsRequest,
         SetEnsConfigRequest,
+        VaultEnsProfileResponse,
         VaultEnsPolicyUpdateRequest,
     )
     from ens_service import namehash
@@ -38,19 +46,25 @@ PROFILE_TEXT_KEYS = [
 def build_router(ens_service, _vault_service, settings) -> APIRouter:
     router = APIRouter(prefix="/v1/ens", tags=["ens"])
 
-    @router.get("/config")
+    @router.get("/config", response_model=EnsConfigResponse)
     def get_ens_config():
+        ens_manager_address = getattr(
+            settings,
+            "ens_manager_address",
+            settings.vault_manager_address or settings.vault_address,
+        )
         return {
             "network": settings.network,
             "chainId": settings.chain_id,
-            "managerAddress": settings.vault_manager_address or settings.vault_address,
+            "managerAddress": ens_manager_address,
+            "vaultContractAddress": settings.vault_manager_address or settings.vault_address,
             "parentName": settings.ens_parent_name,
             "parentNode": ens_service.w3.to_hex(namehash(settings.ens_parent_name)),
             "registryAddress": settings.ens_registry_address,
             "publicResolverAddress": settings.ens_public_resolver_address,
         }
 
-    @router.post("/config/build")
+    @router.post("/config/build", response_model=EnsWriteResponse)
     def build_ens_config_tx(req: SetEnsConfigRequest):
         try:
             return ens_service.build_set_config_tx(
@@ -61,7 +75,7 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/config/sync")
+    @router.post("/config/sync", response_model=EnsWriteResponse)
     def sync_ens_config(req: SetEnsConfigRequest):
         try:
             return ens_service.set_config(
@@ -72,7 +86,7 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/vaults/register/build")
+    @router.post("/vaults/register/build", response_model=EnsWriteResponse)
     def build_register_vault_ens(req: RegisterVaultEnsRequest):
         try:
             return ens_service.build_register_vault_tx(
@@ -82,7 +96,7 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/vaults/register")
+    @router.post("/vaults/register", response_model=EnsWriteResponse)
     def register_vault_ens(req: RegisterVaultEnsRequest):
         try:
             return ens_service.register_vault(
@@ -93,7 +107,7 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.put("/vaults/policy/build")
+    @router.put("/vaults/policy/build", response_model=EnsWriteResponse)
     def build_vault_policy_tx(req: BuildVaultEnsPolicyTxRequest):
         try:
             return ens_service.build_set_vault_texts_tx(
@@ -103,7 +117,7 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.put("/vaults/{vault_id}/policy")
+    @router.put("/vaults/{vault_id}/policy", response_model=EnsWriteResponse)
     def set_vault_policy(vault_id: int, req: VaultEnsPolicyUpdateRequest):
         try:
             return ens_service.set_vault_text_records(
@@ -113,14 +127,14 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/vaults/{vault_id}")
+    @router.get("/vaults/{vault_id}", response_model=VaultEnsProfileResponse)
     def get_vault_ens_profile(vault_id: int):
         try:
             return ens_service.get_vault_profile(vault_id, text_keys=PROFILE_TEXT_KEYS)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/names/{name}")
+    @router.get("/names/{name}", response_model=EnsProfileResponse)
     def get_ens_profile(name: str):
         try:
             return ens_service.get_profile(name, text_keys=PROFILE_TEXT_KEYS)

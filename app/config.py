@@ -64,7 +64,11 @@ for _yaml_path in _yaml_candidates:
 
 
 def _get(yaml_keys: list[str], env_key: str = "", default: Any = "") -> Any:
-    """Read from YAML first, then env var, then default."""
+    """Read from env first, then YAML, then default."""
+    if env_key:
+        env_val = os.getenv(env_key)
+        if env_val is not None:
+            return env_val
     val: Any = _cfg
     for k in yaml_keys:
         if isinstance(val, dict):
@@ -74,10 +78,6 @@ def _get(yaml_keys: list[str], env_key: str = "", default: Any = "") -> Any:
             break
     if val is not None:
         return val
-    if env_key:
-        env_val = os.getenv(env_key)
-        if env_val is not None:
-            return env_val
     return default
 
 
@@ -153,6 +153,7 @@ class Settings:
         )
     )
     ens_parent_name: str = str(_get(["ens", "parent_name"], "ENS_PARENT_NAME", "scampia.eth"))
+    ens_manager_address: str = str(_get(["ens", "manager_address"], "ENS_MANAGER_ADDRESS", ""))
 
     # ── Secret (from .env ONLY) ──
     backend_private_key: str = os.getenv("BACKEND_PRIVATE_KEY", "")

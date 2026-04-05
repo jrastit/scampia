@@ -21,3 +21,9 @@ app/.env
 app/.env.local
 app/.env.production
 *.pyc
+
+# Foundry build artifacts and dependencies
+cache/
+out/
+lib/
+foundry.lock

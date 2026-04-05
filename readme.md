@@ -38,6 +38,8 @@ Base prefix: `/api`
 
 ### Vaults
 
+- `GET /v1/vaults`
+- `GET /v1/vaults/{vault_id}`
 - `POST /v1/vaults/import`
 - `GET /v1/vaults/balances`
 - `GET /v1/vaults/balance/{token_address}`
@@ -47,6 +49,111 @@ Base prefix: `/api`
 - `POST /v1/vaults/agent-swap/build`
 - `POST /v1/vaults/agent-swap/execute`
 - `GET /v1/vaults/{vault_id}/positions/{user_address}`
+
+`GET /v1/vaults` response shape:
+
+```json
+{
+	"items": [
+		{
+			"vault_id": 12,
+			"owner": "0x...",
+			"owner_fee_bps": 300,
+			"asset_token": "0x...",
+			"total_assets": "123450000000000000000",
+			"total_shares": "120000000000000000000"
+		}
+	]
+}
+```
+
+`GET /v1/vaults/{vault_id}` response shape:
+
+```json
+{
+	"vault_id": 12,
+	"owner": "0x...",
+	"owner_fee_bps": 300,
+	"manager_fee_bps": 200,
+	"asset_token": "0x...",
+	"total_assets": "123450000000000000000",
+	"total_shares": "120000000000000000000",
+	"created_at": "2026-04-05T12:00:00Z"
+}
+```
+
+### Users
+
+- `POST /v1/users/connect`
+- `GET /v1/users/{wallet_address}`
+- `GET /v1/users/{wallet_address}/vault-sync`
+- `GET /v1/users/{wallet_address}/investments`
+- `GET /v1/users`
+
+`POST /v1/users/connect` and `GET /v1/users/{wallet_address}` include vault sync fields:
+
+```json
+{
+	"wallet_address": "0x...",
+	"vault_address": "0x...",
+	"safe_address": "0x...",
+	"vault_id": 12,
+	"pending_sync": false,
+	"retry_after_seconds": 0,
+	"sync_source": "onchain_scan"
+}
+```
+
+If `vault_id` is not yet observed via on-chain scan, responses return:
+
+```json
+{
+	"vault_id": null,
+	"pending_sync": true,
+	"retry_after_seconds": 2,
+	"sync_source": "onchain_scan"
+}
+```
+
+When no owner match is found for the requested wallet but vaults exist on-chain,
+the API falls back to the latest global vault id and returns:
+
+```json
+{
+	"vault_id": 123,
+	"pending_sync": false,
+	"retry_after_seconds": 0,
+	"sync_source": "global_latest"
+}
+```
+
+`GET /v1/users/{wallet_address}/investments` response shape:
+
+```json
+{
+	"wallet_address": "0x...",
+	"items": [
+		{
+			"vault_id": 12,
+			"shares": "1000000000000000000",
+			"value": "1020000000000000000",
+			"profit": "20000000000000000"
+		}
+	]
+}
+```
+
+### ENS
+
+- `GET /v1/ens/config`
+- `POST /v1/ens/config/build`
+- `POST /v1/ens/config/sync`
+- `POST /v1/ens/vaults/register/build`
+- `POST /v1/ens/vaults/register`
+- `PUT /v1/ens/vaults/policy/build`
+- `PUT /v1/ens/vaults/{vault_id}/policy`
+- `GET /v1/ens/vaults/{vault_id}`
+- `GET /v1/ens/names/{name}`
 
 ### Trades
 
@@ -99,6 +206,36 @@ Deploy:
 python3 scripts/deploy_vault.py
 ```
 
+Deploy with Foundry (`forge create` + broadcast):
+
+```bash
+set -a && source .env && set +a
+ADMIN_ADDR=$(cast wallet address "$BACKEND_PRIVATE_KEY")
+MANAGER_RECIPIENT="${VAULT_MANAGER_RECIPIENT:-$ADMIN_ADDR}"
+
+forge create contracts/ScampiaVault.sol:ScampiaVault \
+	--rpc-url "$RPC_URL" \
+	--private-key "$BACKEND_PRIVATE_KEY" \
+	--broadcast \
+	--constructor-args "$VAULT_ASSET_TOKEN" "$ADMIN_ADDR" "$MANAGER_RECIPIENT" "$VAULT_MANAGER_FEE_BPS"
+```
+
+After deployment, update these keys in `.env`:
+
+- `VAULT_ADDRESS`
+- `VAULT_MANAGER_ADDRESS`
+
+Quick verification on chain:
+
+```bash
+set -a && source .env && set +a
+cast code "$VAULT_ADDRESS" --rpc-url "$RPC_URL" | head -c 18 && echo
+cast call "$VAULT_ADDRESS" "asset()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "admin()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "managerRecipient()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "managerFeeBps()(uint16)" --rpc-url "$RPC_URL"
+```
+
 One-shot export + deploy:
 
 ```bash
@@ -118,6 +255,13 @@ Important vault variables:
 - `VAULT_MANAGER_ADDRESS`
 - `VAULT_ASSET_TOKEN`
 - `VAULT_MANAGER_FEE_BPS`
+
+Important ENS variables for write endpoints:
+
+- `ENS_REGISTRY_ADDRESS`
+- `ENS_PUBLIC_RESOLVER_ADDRESS`
+- `ENS_PARENT_NAME`
+- `BACKEND_PRIVATE_KEY` or `ENS_PRIVATE_KEY` (required for `/v1/ens/*` write operations)
 
 ## Tests
 
@@ -142,7 +286,36 @@ forge test
 ./.venv/bin/python -m pytest -q tests
 ```
 
-Current automated API suite covers health, vault routes, trades routes, and users routes.
+Current automated API suite covers health, vault routes, trades routes, users routes, and ENS routes.
+
+## OpenAPI
+
+OpenAPI docs are exposed at:
+
+- `/api/v1/openapi.json`
+- `/api/v1/docs`
+
+The main route groups now expose typed response schemas (instead of generic `{}`):
+
+- health
+- users
+- vaults
+- ens
+- trades
+
+Quick local check:
+
+```bash
+./.venv/bin/python - <<'PY'
+from app.main import app
+spec = app.openapi()
+print(spec['paths']['/v1/vaults']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/vaults/{vault_id}']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/users/{wallet_address}/investments']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/ens/config']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/trades/build']['post']['responses']['200']['content']['application/json']['schema'])
+PY
+```
 
 ## Notes
 

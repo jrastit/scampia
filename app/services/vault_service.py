@@ -1,4 +1,5 @@
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from eth_account import Account
 from web3 import Web3
@@ -35,57 +36,43 @@ ERC20_ABI = [
 
 VAULT_ABI = [
     {
+        "inputs": [],
+        "name": "asset",
+        "outputs": [{"name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "vaultCount",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [],
+        "name": "managerFeeBps",
+        "outputs": [{"name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [{"name": "", "type": "uint256"}],
+        "name": "vaults",
+        "outputs": [
+            {"name": "owner", "type": "address"},
+            {"name": "ownerFeeBps", "type": "uint16"},
+            {"name": "totalShares", "type": "uint256"},
+            {"name": "totalAssets", "type": "uint256"},
+            {"name": "exists", "type": "bool"},
+        ],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
         "inputs": [{"name": "ownerFeeBps", "type": "uint16"}],
         "name": "createVault",
         "outputs": [{"name": "vaultId", "type": "uint256"}],
-        "type": "function",
-    },
-    {
-        "inputs": [
-            {"name": "registry", "type": "address"},
-            {"name": "resolver", "type": "address"},
-            {"name": "parentNode", "type": "bytes32"},
-        ],
-        "name": "setEnsConfig",
-        "outputs": [],
-        "type": "function",
-    },
-    {
-        "inputs": [
-            {"name": "vaultId", "type": "uint256"},
-            {"name": "label", "type": "string"},
-        ],
-        "name": "registerVaultEns",
-        "outputs": [{"name": "node", "type": "bytes32"}],
-        "type": "function",
-    },
-    {
-        "inputs": [
-            {"name": "vaultId", "type": "uint256"},
-            {"name": "key", "type": "string"},
-            {"name": "value", "type": "string"},
-        ],
-        "name": "setVaultEnsText",
-        "outputs": [],
-        "type": "function",
-    },
-    {
-        "inputs": [
-            {"name": "vaultId", "type": "uint256"},
-            {"name": "keys", "type": "string[]"},
-            {"name": "values", "type": "string[]"},
-        ],
-        "name": "setVaultEnsTexts",
-        "outputs": [],
-        "type": "function",
-    },
-    {
-        "inputs": [{"name": "vaultId", "type": "uint256"}],
-        "name": "getVaultEnsRecord",
-        "outputs": [
-            {"name": "node", "type": "bytes32"},
-            {"name": "label", "type": "string"},
-        ],
         "type": "function",
     },
     {
@@ -163,6 +150,76 @@ class VaultService:
 
     def _vault_contract(self):
         return self.w3.eth.contract(address=self.manager_contract_address(), abi=VAULT_ABI)
+
+    def _format_created_at(self, block_timestamp: int) -> str:
+        return datetime.fromtimestamp(block_timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _get_created_at_for_vault(self, vault_id: int) -> Optional[str]:
+        topic0 = self.w3.keccak(text="VaultCreated(uint256,address,uint16)").hex()
+        topic1 = "0x" + vault_id.to_bytes(32, "big").hex()
+
+        # Some RPC providers limit historical filters; silently degrade to null.
+        logs = self.w3.eth.get_logs(
+            {
+                "address": self.manager_contract_address(),
+                "fromBlock": 0,
+                "toBlock": "latest",
+                "topics": [topic0, topic1],
+            }
+        )
+        if not logs:
+            return None
+
+        block = self.w3.eth.get_block(logs[-1]["blockNumber"])
+        return self._format_created_at(int(block["timestamp"]))
+
+    def _read_vault(self, vault_id: int) -> Dict[str, Any]:
+        vault = self._vault_contract()
+        owner, owner_fee_bps, total_shares, total_assets, exists = vault.functions.vaults(vault_id).call()
+        if not exists:
+            raise ValueError("vault not found")
+
+        manager_fee_bps = vault.functions.managerFeeBps().call()
+        asset_token = vault.functions.asset().call()
+
+        return {
+            "vault_id": vault_id,
+            "owner": self._checksum(owner),
+            "owner_fee_bps": int(owner_fee_bps),
+            "manager_fee_bps": int(manager_fee_bps),
+            "asset_token": self._checksum(asset_token),
+            "total_assets": str(total_assets),
+            "total_shares": str(total_shares),
+        }
+
+    def list_vaults(self) -> Dict[str, List[Dict[str, Any]]]:
+        vault = self._vault_contract()
+        count = int(vault.functions.vaultCount().call())
+        items: List[Dict[str, Any]] = []
+
+        for vault_id in range(1, count + 1):
+            try:
+                metadata = self._read_vault(vault_id)
+                items.append(
+                    {
+                        "vault_id": metadata["vault_id"],
+                        "owner": metadata["owner"],
+                        "owner_fee_bps": metadata["owner_fee_bps"],
+                        "asset_token": metadata["asset_token"],
+                        "total_assets": metadata["total_assets"],
+                        "total_shares": metadata["total_shares"],
+                    }
+                )
+            except Exception:
+                continue
+
+        return {"items": items}
+
+    def get_vault_details(self, vault_id: int) -> Dict[str, Any]:
+        metadata = self._read_vault(vault_id)
+        created_at = self._get_created_at_for_vault(vault_id)
+        metadata["created_at"] = created_at
+        return metadata
 
     def get_eth_balance(self) -> int:
         return self.w3.eth.get_balance(self.manager_contract_address())

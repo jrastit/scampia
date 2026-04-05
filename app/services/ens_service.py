@@ -72,12 +72,13 @@ PUBLIC_RESOLVER_ABI = [
     },
 ]
 
-VAULT_ENS_ABI = [
+ENS_MANAGER_ABI = [
     {
         "inputs": [
             {"internalType": "address", "name": "registry", "type": "address"},
             {"internalType": "address", "name": "resolver", "type": "address"},
             {"internalType": "bytes32", "name": "parentNode", "type": "bytes32"},
+            {"internalType": "address", "name": "newVaultContract", "type": "address"},
         ],
         "name": "setEnsConfig",
         "outputs": [],
@@ -115,6 +116,13 @@ VAULT_ENS_ABI = [
         "stateMutability": "view",
         "type": "function",
     },
+    {
+        "inputs": [],
+        "name": "vaultContract",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
 ]
 
 
@@ -149,7 +157,7 @@ class ENSService:
 
     def _require_signer(self) -> None:
         if not self.account:
-            raise ValueError("backend_private_key or ens_private_key is required for vault ENS writes")
+            raise ValueError("backend_private_key or ens_private_key is required for ENS manager writes")
 
     def _vault_contract_address(self) -> str:
         address = settings.vault_manager_address or settings.vault_address
@@ -157,8 +165,13 @@ class ENSService:
             raise ValueError("VAULT_MANAGER_ADDRESS required")
         return self._checksum(address)
 
-    def _vault_contract(self):
-        return self.w3.eth.contract(address=self._vault_contract_address(), abi=VAULT_ENS_ABI)
+    def _manager_contract_address(self) -> str:
+        if not settings.ens_manager_address:
+            raise ValueError("ENS_MANAGER_ADDRESS required")
+        return self._checksum(settings.ens_manager_address)
+
+    def _manager_contract(self):
+        return self.w3.eth.contract(address=self._manager_contract_address(), abi=ENS_MANAGER_ABI)
 
     def _resolver_contract(self, resolver_address: str):
         return self.w3.eth.contract(
@@ -197,7 +210,7 @@ class ENSService:
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
         if receipt.status != 1:
-            raise ValueError(f"Vault ENS transaction reverted: {self.w3.to_hex(tx_hash)}")
+            raise ValueError(f"ENS manager transaction reverted: {self.w3.to_hex(tx_hash)}")
         return self.w3.to_hex(tx_hash)
 
     def _contract_tx(self, to: str, data: str, value: str | int = "0", **extra) -> dict:
@@ -221,18 +234,21 @@ class ENSService:
     ) -> dict:
         registry = self._checksum(registry_address or settings.ens_registry_address)
         resolver = self._checksum(resolver_address or settings.ens_public_resolver_address)
+        vault_contract = self._vault_contract_address()
         parent = parent_name or settings.ens_parent_name
         parent_node = namehash(parent)
-        vault = self._vault_contract()
-        data = vault.encode_abi("setEnsConfig", args=[registry, resolver, parent_node])
+        manager = self._manager_contract()
+        data = manager.encode_abi("setEnsConfig", args=[registry, resolver, parent_node, vault_contract])
         return self._contract_tx(
-            to=vault.address,
+            to=manager.address,
             data=data,
             value="0",
             registry=registry,
             resolver=resolver,
             parentName=parent,
             parentNode=self.w3.to_hex(parent_node),
+            vaultContract=vault_contract,
+            ensManagerAddress=manager.address,
         )
 
     def set_config(
@@ -256,20 +272,23 @@ class ENSService:
             "resolver": tx_data["resolver"],
             "parentName": tx_data["parentName"],
             "parentNode": tx_data["parentNode"],
+            "vaultContract": tx_data["vaultContract"],
+            "ensManagerAddress": tx_data["ensManagerAddress"],
         }
 
     def build_register_vault_tx(self, vault_id: int, label: str) -> dict:
-        vault = self._vault_contract()
-        data = vault.encode_abi("registerVaultEns", args=[vault_id, label])
+        manager = self._manager_contract()
+        data = manager.encode_abi("registerVaultEns", args=[vault_id, label])
         full_name = self.resolve_full_name(label)
         return self._contract_tx(
-            to=vault.address,
+            to=manager.address,
             data=data,
             value="0",
             vaultId=str(vault_id),
             label=label,
             name=full_name,
-            node=self.w3.to_hex(keccak(namehash(settings.ens_parent_name) + labelhash(label))),
+            node=self.w3.to_hex(namehash(full_name)),
+            ensManagerAddress=manager.address,
         )
 
     def build_set_vault_texts_tx(self, vault_id: int, texts: Dict[str, str]) -> dict:
@@ -277,16 +296,17 @@ class ENSService:
         if not normalized:
             raise ValueError("At least one ENS text record is required")
 
-        vault = self._vault_contract()
+        manager = self._manager_contract()
         keys = list(normalized.keys())
         values = [normalized[key] for key in keys]
-        data = vault.encode_abi("setVaultEnsTexts", args=[vault_id, keys, values])
+        data = manager.encode_abi("setVaultEnsTexts", args=[vault_id, keys, values])
         return self._contract_tx(
-            to=vault.address,
+            to=manager.address,
             data=data,
             value="0",
             vaultId=str(vault_id),
             texts=normalized,
+            ensManagerAddress=manager.address,
         )
 
     def register_vault(self, vault_id: int, label: str, texts: Optional[Dict[str, str]] = None) -> dict:
@@ -323,6 +343,7 @@ class ENSService:
             "node": register_tx["node"],
             "tx_hashes": tx_hashes,
             "texts": normalized,
+            "ensManagerAddress": register_tx["ensManagerAddress"],
         }
 
     def set_vault_text_records(self, vault_id: int, texts: Dict[str, str]) -> dict:
@@ -339,11 +360,12 @@ class ENSService:
             "vaultId": str(vault_id),
             "tx_hash": tx_hash,
             "texts": tx_data["texts"],
+            "ensManagerAddress": tx_data["ensManagerAddress"],
         }
 
     def get_vault_ens_record(self, vault_id: int) -> dict:
-        vault = self._vault_contract()
-        node, label = vault.functions.getVaultEnsRecord(vault_id).call()
+        manager = self._manager_contract()
+        node, label = manager.functions.getVaultEnsRecord(vault_id).call()
         name = self.resolve_full_name(label) if label else ""
         return {
             "vaultId": str(vault_id),
@@ -351,6 +373,8 @@ class ENSService:
             "name": name,
             "node": self.w3.to_hex(node),
             "configured": self.w3.to_hex(node) != ZERO_NODE and bool(label),
+            "ensManagerAddress": manager.address,
+            "vaultContract": manager.functions.vaultContract().call(),
         }
 
     def get_name_owner(self, name: str) -> str:
