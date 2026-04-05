@@ -102,7 +102,7 @@ class UniswapService:
             "swapper": wallet_address,
             "recipient": wallet_address,
             "slippageTolerance": self._slippage_percent_from_bps(slippage_bps),
-            "generatePermitAsTransaction": False,
+            "generatePermitAsTransaction": True,
         }
 
         return self._post("/quote", payload)
