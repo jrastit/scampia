@@ -1,255 +1,101 @@
-# OpenClaw Safe Layer
+# Scampia Vault Layer
 
-> Secure onchain custody and trade validation for AI agents.
+Secure on-chain custody and trading control for AI agents, based on a singleton multi-vault smart contract.
 
 ## Overview
 
-OpenClaw provides secure onchain skills for user-owned agents. Each agent can have an ENS identity that resolves to the user's Safe smart account. Trades are built through Uniswap and constrained by Zodiac permissions before execution through the Safe.
+Scampia now uses one deployed contract (`ScampiaVault`) that manages many vaults (`vaultId`).
 
-The **Safe Layer** acts as the security and control middleware between the AI agent and the blockchain. It protects funds, enforces permissions, and validates every trade request before any onchain execution.
+- Each vault has an owner.
+- The vault owner sets an owner fee rate (`ownerFeeBps`).
+- A manager fee rate (`managerFeeBps`) is set globally by admin.
+- Non-owner users pay fees only on realized profit at withdraw.
+- Trading operations are restricted to admin (backend signer).
+- API keys remain off-chain in backend services.
 
-## Architecture
+## Core model
 
-<p align="center">
-  <img src="./architecture.svg" alt="OpenClaw Safe Layer Architecture" width="680"/>
-</p>
+1. Deploy singleton contract once.
+2. Create a vault (`createVault`) per owner.
+3. Users deposit assets into a specific `vaultId`.
+4. Admin executes trades for that `vaultId` through whitelisted targets.
+5. Users withdraw shares from that `vaultId`.
 
-## Transaction flow
+Fee behavior at withdraw for non-owner users:
 
-1. **Trade request** — The OpenClaw agent sends a trade intention (e.g. "swap 500 USDC → ETH")
-2. **Balance check** — The Safe Layer verifies the vault holds enough funds
-3. **Permission check** — Zodiac Roles module enforces: max amount, max trades/day, whitelisted contracts and tokens
-4. **Validation** — If all checks pass, the transaction is built and executed through the Safe. If rejected, the reason is logged
-5. **Execution** — The swap is sent to Uniswap via the Safe smart account
-6. **Result** — The front displays the transaction, updated balances, and agent performance
+- `profit = max(grossAssets - releasedPrincipal, 0)`
+- `ownerFee = profit * ownerFeeBps / 10000`
+- `managerFee = profit * managerFeeBps / 10000`
+- user receives `grossAssets - ownerFee - managerFee`
 
-## Safe Layer responsibilities
+## API routes
 
-### Balance controls
-- Token balance verification before each trade
-- Available liquidity tracking
-- Minimum / maximum amount enforcement
-- Reserved funds management
+Base prefix: `/api`
 
-### Permission controls (Zodiac Roles)
-- Agent authorization (enabled / disabled)
-- Protocol whitelist (e.g. Uniswap Router only)
-- Function whitelist (e.g. `exactInputSingle` only)
-- Token pair whitelist
+### Health
 
-### Risk controls
-- Max amount per trade
-- Max daily volume per agent
-- Max number of trades per day
-- Max exposure per agent (% of vault)
-- Emergency stop
+- `GET /health`
 
-### Technical controls
-- Transaction well-formed
-- Slippage within bounds
-- Deadline valid
-- Target contract matches whitelist
+### Vaults
 
-## Uniswap integration notes
+- `POST /v1/vaults/import`
+- `GET /v1/vaults/balances`
+- `GET /v1/vaults/balance/{token_address}`
+- `POST /v1/vaults/create/build`
+- `POST /v1/vaults/deposit/build`
+- `POST /v1/vaults/withdraw/build`
+- `POST /v1/vaults/agent-swap/build`
+- `POST /v1/vaults/agent-swap/execute`
+- `GET /v1/vaults/{vault_id}/positions/{user_address}`
 
-- Uniswap Trading API base should be set to `https://trade-api.gateway.uniswap.org` (with or without `/v1` in env; the service normalizes it).
-- Quotes are requested through `/quote` and include routing plus optional `permitData`.
-- Routing is handled automatically:
-  - `CLASSIC`, `WRAP`, `UNWRAP`, `BRIDGE`, `CHAINED` -> swap flow
-  - `DUTCH_V2`, `DUTCH_V3`, `PRIORITY`, `DUTCH_LIMIT`, `LIMIT_ORDER` -> order flow
-- If `permitData` is returned by quote, the client must sign EIP-712 and pass the signature as `permit_signature`.
-- `prepare-safe-tx` is only for swap-compatible routes (not UniswapX gasless order routes).
-- Uniswap API requests retry on HTTP 429 using exponential backoff.
+### Trades
 
-## API examples
+- `POST /v1/trades/quote`
+- `POST /v1/trades/build`
+- `POST /v1/trades/prepare-vault-tx`
+- `POST /v1/trades/prepare-safe-tx` (compat alias)
+- `POST /v1/trades/execute-vault-swap`
 
-### Import a Safe
+## Quick local run
+
 ```bash
-curl -X POST https://scampia.fexhu.com:20443/api/v1/safes/import \
-  -H "Content-Type: application/json" \
-  -d '{
-    "safe_address": "0x1234567890123456789012345678901234567890",
-    "chain_id": 8453
-  }'
-```
-
-### Create ENS subname
-```bash
-curl -X POST https://scampia.fexhu.com:20443/api/v1/ens/subnames \
-  -H "Content-Type: application/json" \
-  -d '{
-    "parent_name": "openclaw.eth",
-    "label": "alice-trader",
-    "safe_address": "0x1234567890123456789012345678901234567890"
-  }'
-```
-
-### Set ENS records
-```bash
-curl -X PUT https://scampia.fexhu.com:20443/api/v1/ens/records \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "alice-trader.openclaw.eth",
-    "address": "0x1234567890123456789012345678901234567890",
-    "texts": {
-      "agent:type": "trader",
-      "agent:capabilities": "quote,swap",
-      "agent:api": "https://api.openclaw.xyz/v1/agents/alice-trader",
-      "agent:safe": "0x1234567890123456789012345678901234567890"
-    }
-  }'
-```
-
-### Get quote
-```bash
-curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/quote \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain_id": 8453,
-    "safe_address": "0x1234567890123456789012345678901234567890",
-    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
-    "token_out": "0x4200000000000000000000000000000000000006",
-    "amount_in": "1000000",
-    "slippage_bps": 50
-  }'
-```
-
-### Build trade (swap or order based on routing)
-```bash
-curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/build \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain_id": 8453,
-    "safe_address": "0x1234567890123456789012345678901234567890",
-    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
-    "token_out": "0x4200000000000000000000000000000000000006",
-    "amount_in": "1000000",
-    "slippage_bps": 50,
-    "permit_signature": "0x..."
-  }'
-```
-
-### Build Safe-ready tx (swap routes only)
-```bash
-curl -X POST https://scampia.fexhu.com:20443/api/v1/trades/prepare-safe-tx \
-  -H "Content-Type: application/json" \
-  -d '{
-    "chain_id": 8453,
-    "safe_address": "0x1234567890123456789012345678901234567890",
-    "token_in": "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
-    "token_out": "0x4200000000000000000000000000000000000006",
-    "amount_in": "1000000",
-    "slippage_bps": 50,
-    "permit_signature": "0x..."
-  }'
-```
-
-## Production deployment behind Apache
-
-Target public URL: `https://scampia.fexhu.com:20443/api`
-
-1. Start backend on private port (default 8000 in `run.sh`):
-```bash
+. ./.venv/bin/activate
+set -a && . ./.env && set +a
 ./run.sh
 ```
 
-2. Enable Apache modules:
-```bash
-sudo a2enmod ssl proxy proxy_http headers
-```
-
-3. Install vhost config:
-```bash
-sudo cp deploy/apache/scampia.fexhu.com-20443.conf /etc/apache2/sites-available/
-sudo a2ensite scampia.fexhu.com-20443.conf
-```
-
-4. Reload Apache:
-```bash
-sudo systemctl reload apache2
-```
-
-5. Verify API through Apache:
-```bash
-curl -k https://scampia.fexhu.com:20443/api/health
-```
-
-Notes:
-- Update certificate paths in `deploy/apache/scampia.fexhu.com-20443.conf` if needed.
-- Keep `APP_ROOT_PATH=/api` so FastAPI generates correct links/docs behind the proxy.
-
-## Docker build and run
-
-Build the image:
+Health check:
 
 ```bash
-docker build -t scampia-api .
+curl -sS http://127.0.0.1:8000/api/health
 ```
 
-Run the container:
+## Contract artifacts
 
-```bash
-docker run --rm -p 8000:8000 --env-file .env scampia-api
-```
-
-Check health endpoint:
-
-```bash
-curl http://127.0.0.1:8000/api/health
-```
-
-## Docker Compose (background)
-
-Use either `docker compose` (v2 plugin) or `docker-compose` (v1 binary).
-
-Start in background:
-
-```bash
-docker compose up -d --build
-# or
-docker-compose up -d --build
-```
-
-Follow logs:
-
-```bash
-docker compose logs -f scampia
-# or
-docker-compose logs -f scampia
-```
-
-Stop:
-
-```bash
-docker compose down
-# or
-docker-compose down
-```
-
-Helper script:
-
-```bash
-./run_debug_docker.sh up
-./run_debug_docker.sh logs
-./run_debug_docker.sh down
-```
-
-## Vault contract deployment and ABI export
-
-Export ABI + bytecode:
+Export ABI and bytecode:
 
 ```bash
 python3 scripts/export_abi.py
 ```
 
-Deploy the singleton multi-vault contract:
+Artifacts generated:
+
+- `contracts/artifacts/ScampiaVault.abi.json`
+- `contracts/artifacts/ScampiaVault.bytecode.txt`
+
+## Contract deployment
+
+Required environment variables:
+
+- `RPC_URL`
+- `BACKEND_PRIVATE_KEY`
+- `VAULT_ASSET_TOKEN`
+- `VAULT_MANAGER_RECIPIENT`
+- `VAULT_MANAGER_FEE_BPS`
+
+Deploy:
 
 ```bash
-export RPC_URL="https://..."
-export BACKEND_PRIVATE_KEY="0x..."
-export VAULT_ASSET_TOKEN="0x..."
-export VAULT_MANAGER_RECIPIENT="0x..."
-export VAULT_MANAGER_FEE_BPS="500"
 python3 scripts/deploy_vault.py
 ```
 
@@ -259,13 +105,47 @@ One-shot export + deploy:
 bash scripts/deploy_and_export.sh
 ```
 
-## Solidity unit tests (Foundry)
+## Configuration
 
-Install Foundry if needed, then:
+Main runtime configuration sources:
+
+- `.env`
+- `app/settings.yaml`
+
+Important vault variables:
+
+- `VAULT_ADDRESS`
+- `VAULT_MANAGER_ADDRESS`
+- `VAULT_ASSET_TOKEN`
+- `VAULT_MANAGER_FEE_BPS`
+
+## Tests
+
+### Solidity tests (Foundry)
+
+Install dependency library:
 
 ```bash
-forge install foundry-rs/forge-std --no-commit
+forge install foundry-rs/forge-std
+```
+
+Run tests:
+
+```bash
 forge test
 ```
 
+### API tests (pytest)
 
+```bash
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/python -m pytest -q tests
+```
+
+Current automated API suite covers health, vault routes, trades routes, and users routes.
+
+## Notes
+
+- Uniswap quote/build may require a Permit2 signature (`permit_signature`) depending on returned `permitData`.
+- Trade API base is normalized to avoid duplicated `/v1`.
+- Rate limiting (`429`) is retried with exponential backoff.
