@@ -23,6 +23,10 @@ class VaultEnsPolicyUpdateRequest(BaseModel):
     max_slippage_tolerance_pct: Optional[float] = None
     max_gas_price_gwei: Optional[float] = None
     authorized_tokens: Optional[List[str]] = None
+    bot_name: Optional[str] = None
+    benefits: Optional[int] = None
+    trades_count: Optional[int] = None
+    successful_trades: Optional[int] = None
 
     def to_text_records(self) -> Dict[str, str]:
         records: Dict[str, str] = {}

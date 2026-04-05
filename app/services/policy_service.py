@@ -61,6 +61,7 @@ class PolicyService:
         # take_profit_pct,
         # max_slippage_tolerance_pct,
         # max_gas_price_gwei,
+        vault_id,
         token_price,
         token_in,
         token_out) -> bool:

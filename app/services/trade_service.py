@@ -1,6 +1,11 @@
 from typing import Any, Dict, Iterable, Optional
+
+from eth_utils import logging
+from app.api.ens import PROFILE_TEXT_KEYS
 from app.data import user_data
 from web3 import Web3
+
+from app.services import ens_service
 try:
     from app.config import settings
     from app.services.policy_service import PolicyService
@@ -315,7 +320,6 @@ class TradeService:
         return self.prepare_vault_trade(*args, **kwargs)
 
     # ── Vault swap via SwapRouter02 (V3) ──
-
     def execute_vault_swap(
         self,
         chain_id: int,
@@ -327,9 +331,12 @@ class TradeService:
         permit_signature: Optional[str] = None,
     ) -> Dict[str, Any]:
         wallet_address = settings.vault_manager_address
+        logger = logging.getLogger("my_app")
+        logging.basicConfig(level=logging.INFO)
         if not wallet_address:
             raise ValueError("VAULT_MANAGER_ADDRESS required")
-
+        if self.policy_service.validate_parameters(amount_in,token_in,token_out) is False:
+            return
         w3 = self.vault_service.w3
         vault_addr = Web3.to_checksum_address(wallet_address)
         token_in_cs = Web3.to_checksum_address(token_in)
@@ -389,6 +396,18 @@ class TradeService:
         # Wait for confirmation
         tx_hash = execution.get("txHash")
         status = "success"
+        ens_after_trade = ens_service.get_vault_profile(vault_id, text_keys=PROFILE_TEXT_KEYS)
+        trade_benefit = amount_out - amount_in
+        benefits = int(float(ens_after_trade["benefits"]or 0))
+        trades_count = int(ens_after_trade["trades_count"]or 0)
+        successful_trades = int(ens_after_trade["successful_trades"]or 0)
+        benefits += trade_benefit
+        if trade_benefit >=0:
+            successful_trades +=1
+        trades_count += 1
+        dict_ens = {'benefits': benefits, 'trades_count':trades_count, 'successful_trades':successful_trades}
+        ens_service.set_vault_text_records(vault_id, dict_ens)
+        logger.info(f"vault id:{vault_id}")
         if tx_hash:
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
             status = "success" if receipt.status == 1 else "failed"
