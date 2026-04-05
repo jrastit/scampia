@@ -26,6 +26,12 @@ PROFILE_TEXT_KEYS = [
     "max_slippage_tolerance_pct",
     "max_gas_price_gwei",
     "authorized_tokens",
+    # et côté agent:
+    "bot_name",
+    "owner_id",
+    "benefits",
+    "trades_count",
+    "successful_trades"
 ]
 
 
