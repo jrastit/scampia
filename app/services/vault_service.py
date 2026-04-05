@@ -20,6 +20,16 @@ ERC20_ABI = [
     },
     {
         "constant": True,
+        "inputs": [
+            {"name": "owner", "type": "address"},
+            {"name": "spender", "type": "address"},
+        ],
+        "name": "allowance",
+        "outputs": [{"name": "", "type": "uint256"}],
+        "type": "function",
+    },
+    {
+        "constant": True,
         "inputs": [],
         "name": "decimals",
         "outputs": [{"name": "", "type": "uint8"}],
@@ -235,6 +245,36 @@ class VaultService:
     def get_token_symbol(self, token_address: str) -> str:
         contract = self.w3.eth.contract(address=self._checksum(token_address), abi=ERC20_ABI)
         return contract.functions.symbol().call()
+
+    def get_token_allowance(self, token_address: str, owner_address: str, spender_address: str) -> int:
+        contract = self.w3.eth.contract(address=self._checksum(token_address), abi=ERC20_ABI)
+        return contract.functions.allowance(
+            self._checksum(owner_address),
+            self._checksum(spender_address),
+        ).call()
+
+    def get_deposit_precheck(self, vault_id: int, owner_address: str, amount: int) -> Dict[str, Any]:
+        _ = vault_id
+        if amount < 0:
+            raise ValueError("amount must be >= 0")
+
+        asset_token = self._vault_contract().functions.asset().call()
+        spender = self.manager_contract_address()
+        allowance = self.get_token_allowance(asset_token, owner_address, spender)
+        decimals = self.get_token_decimals(asset_token)
+        symbol = self.get_token_symbol(asset_token)
+
+        return {
+            "vaultId": vault_id,
+            "assetToken": self._checksum(asset_token),
+            "assetSymbol": symbol,
+            "assetDecimals": decimals,
+            "owner": self._checksum(owner_address),
+            "spender": spender,
+            "amount": str(amount),
+            "allowance": str(allowance),
+            "allowanceSufficient": allowance >= amount,
+        }
 
     def get_all_balances(self) -> Dict[str, Any]:
         balances: Dict[str, Any] = {

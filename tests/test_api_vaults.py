@@ -28,6 +28,8 @@ class VaultServiceStub:
         }
 
     def get_vault_details(self, vault_id: int):
+        if vault_id == 999:
+            raise ValueError("vault not found")
         self.calls.append(("get_vault_details", vault_id))
         return {
             "vault_id": vault_id,
@@ -78,6 +80,20 @@ class VaultServiceStub:
     def get_user_position(self, vault_id: int, user_address: str):
         self.calls.append(("get_user_position", vault_id, user_address))
         return {"vaultId": str(vault_id), "user": user_address, "shares": "0"}
+
+    def get_deposit_precheck(self, vault_id: int, owner_address: str, amount: int):
+        self.calls.append(("get_deposit_precheck", vault_id, owner_address, amount))
+        return {
+            "vaultId": vault_id,
+            "assetToken": "0xasset",
+            "assetSymbol": "USDC",
+            "assetDecimals": 6,
+            "owner": owner_address,
+            "spender": "0xmanager",
+            "amount": str(amount),
+            "allowance": "500",
+            "allowanceSufficient": amount <= 500,
+        }
 
 
 def _client():
@@ -160,3 +176,25 @@ def test_get_vault_details_endpoint() -> None:
     assert body["manager_fee_bps"] == 200
     assert body["created_at"] == "2026-04-05T12:00:00Z"
     assert ("get_vault_details", 12) in stub.calls
+
+
+def test_get_vault_details_404_when_missing() -> None:
+    client, _ = _client()
+
+    response = client.get("/v1/vaults/999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Vault not found"
+
+
+def test_deposit_allowance_precheck_endpoint() -> None:
+    client, stub = _client()
+
+    response = client.get("/v1/vaults/12/deposit/allowance/0xabc", params={"amount": 400})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["vaultId"] == 12
+    assert body["allowance"] == "500"
+    assert body["allowanceSufficient"] is True
+    assert ("get_deposit_precheck", 12, "0xabc", 400) in stub.calls
