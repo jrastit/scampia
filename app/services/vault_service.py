@@ -456,7 +456,7 @@ class VaultService:
             "from": self.backend_account.address,
             "nonce": self.w3.eth.get_transaction_count(self.backend_account.address, "pending"),
             "gas": 700_000,
-            "gasPrice": self.w3.eth.gas_price,
+            "gasPrice": self.w3.eth.gas_price * 3,
             "value": 0,
         })
 
