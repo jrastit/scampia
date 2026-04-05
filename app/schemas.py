@@ -135,6 +135,10 @@ class UserResponse(BaseModel):
     wallet_address: str
     vault_address: Optional[str] = None
     safe_address: Optional[str] = None
+    vault_id: Optional[int] = None
+    pending_sync: bool = False
+    retry_after_seconds: int = 0
+    sync_source: str = "onchain_scan"
     network: Optional[str] = None
     chain_id: Optional[int] = None
     created_at: Optional[str] = None
@@ -146,7 +150,19 @@ class ConnectWalletResponse(BaseModel):
     wallet_address: str
     vault_address: Optional[str] = None
     safe_address: Optional[str] = None
+    vault_id: Optional[int] = None
+    pending_sync: bool = False
+    retry_after_seconds: int = 0
+    sync_source: str = "onchain_scan"
     created_at: Optional[str] = None
+
+
+class UserVaultSyncResponse(BaseModel):
+    wallet_address: str
+    vault_id: Optional[int] = None
+    pending_sync: bool
+    retry_after_seconds: int
+    sync_source: str = "onchain_scan"
 
 
 class UserInvestmentItem(BaseModel):

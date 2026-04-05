@@ -86,8 +86,34 @@ Base prefix: `/api`
 
 - `POST /v1/users/connect`
 - `GET /v1/users/{wallet_address}`
+- `GET /v1/users/{wallet_address}/vault-sync`
 - `GET /v1/users/{wallet_address}/investments`
 - `GET /v1/users`
+
+`POST /v1/users/connect` and `GET /v1/users/{wallet_address}` include vault sync fields:
+
+```json
+{
+	"wallet_address": "0x...",
+	"vault_address": "0x...",
+	"safe_address": "0x...",
+	"vault_id": 12,
+	"pending_sync": false,
+	"retry_after_seconds": 0,
+	"sync_source": "onchain_scan"
+}
+```
+
+If `vault_id` is not yet observed via on-chain scan, responses return:
+
+```json
+{
+	"vault_id": null,
+	"pending_sync": true,
+	"retry_after_seconds": 2,
+	"sync_source": "onchain_scan"
+}
+```
 
 `GET /v1/users/{wallet_address}/investments` response shape:
 

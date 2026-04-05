@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.schemas import ConnectWalletResponse, UserInvestmentsResponse, UserResponse
+from app.schemas import ConnectWalletResponse, UserInvestmentsResponse, UserResponse, UserVaultSyncResponse
 
 
 class ConnectWalletRequest(BaseModel):
@@ -25,6 +25,13 @@ def build_router(user_service, get_db) -> APIRouter:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         return user
+
+    @router.get("/{wallet_address}/vault-sync", response_model=UserVaultSyncResponse)
+    def get_user_vault_sync(wallet_address: str, db: Session = Depends(get_db)):
+        payload = user_service.get_user_vault_sync(db, wallet_address)
+        if not payload:
+            raise HTTPException(status_code=404, detail="User not found")
+        return payload
 
     @router.get("/{wallet_address}/investments", response_model=UserInvestmentsResponse)
     def get_user_investments(wallet_address: str):
