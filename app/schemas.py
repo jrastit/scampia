@@ -77,7 +77,6 @@ class BuildVaultEnsPolicyTxRequest(VaultEnsPolicyUpdateRequest):
 class SetEnsConfigRequest(BaseModel):
     registry_address: Optional[str] = None
     resolver_address: Optional[str] = None
-    parent_name: Optional[str] = None
 
 
 class UniswapQuoteRequest(BaseModel):

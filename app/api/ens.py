@@ -66,22 +66,24 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
 
     @router.post("/config/build", response_model=EnsWriteResponse)
     def build_ens_config_tx(req: SetEnsConfigRequest):
+        parent_name = settings.parent_name
         try:
             return ens_service.build_set_config_tx(
                 registry_address=req.registry_address,
                 resolver_address=req.resolver_address,
-                parent_name=req.parent_name,
+                parent_name=parent_name,
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/config/sync", response_model=EnsWriteResponse)
     def sync_ens_config(req: SetEnsConfigRequest):
+        parent_name = settings.parent_name
         try:
             return ens_service.set_config(
                 registry_address=req.registry_address,
                 resolver_address=req.resolver_address,
-                parent_name=req.parent_name,
+                parent_name=parent_name,
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
