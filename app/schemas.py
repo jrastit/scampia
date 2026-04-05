@@ -160,6 +160,7 @@ class UserResponse(BaseModel):
 class ConnectWalletResponse(BaseModel):
     status: str
     wallet_address: str
+    api_key: str
     vault_address: Optional[str] = None
     safe_address: Optional[str] = None
     vault_id: Optional[int] = None

@@ -84,6 +84,7 @@ class UserService:
             vault_address = existing.vault_address or existing.safe_address
             payload = {
                 "status": "existing",
+                "api_key": existing.api_key,
                 "wallet_address": existing.wallet_address,
                 "vault_address": vault_address,
                 "safe_address": vault_address,
@@ -106,6 +107,7 @@ class UserService:
 
         payload = {
             "status": "created",
+            "api_key": user.api_key,
             "wallet_address": user.wallet_address,
             "vault_address": user.safe_address,
             "safe_address": user.safe_address,
