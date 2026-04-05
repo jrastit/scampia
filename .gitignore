@@ -27,3 +27,4 @@ cache/
 out/
 lib/
 foundry.lock
+scampia.db

@@ -24,5 +24,15 @@ def init_db():
     with engine.begin() as conn:
         rows = conn.execute(text("PRAGMA table_info(users)")).fetchall()
         existing_columns = {row[1] for row in rows}
-        if "vault_address" not in existing_columns:
-            conn.execute(text("ALTER TABLE users ADD COLUMN vault_address VARCHAR"))
+        required_columns = {
+            "vault_address": "ALTER TABLE users ADD COLUMN vault_address VARCHAR",
+            "network": "ALTER TABLE users ADD COLUMN network VARCHAR NOT NULL DEFAULT 'ethereum-sepolia'",
+            "chain_id": "ALTER TABLE users ADD COLUMN chain_id INTEGER NOT NULL DEFAULT 11155111",
+            "is_active": "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1",
+            "agent_active_transactions": "ALTER TABLE users ADD COLUMN agent_active_transactions INTEGER DEFAULT 0",
+            "api_key": "ALTER TABLE users ADD COLUMN api_key VARCHAR",
+        }
+
+        for column_name, alter_sql in required_columns.items():
+            if column_name not in existing_columns:
+                conn.execute(text(alter_sql))
