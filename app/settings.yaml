@@ -20,8 +20,8 @@ safe:
 
 # ── Vault ──
 vault:
-  address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
-  manager_address: "0x200918f2Df3217b3d0eBD3b90a4b90D0da152671"
+  address: "0x793BC35Aa2045D0d4779b11e60e02DDA10Dc7037"
+  manager_address: "0x793BC35Aa2045D0d4779b11e60e02DDA10Dc7037"
   asset_token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
   manager_fee_bps: 500
 
