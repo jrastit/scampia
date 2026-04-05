@@ -125,6 +125,18 @@ def test_token_balance_endpoint() -> None:
     assert body["symbol"] == "USDC"
 
 
+def test_balances_endpoint_not_captured_by_vault_id_route() -> None:
+    client, stub = _client()
+
+    response = client.get("/v1/vaults/balances")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "USDC" in body
+    assert body["USDC"]["balance"] == 123
+    assert not any(call[0] == "get_vault_details" for call in stub.calls)
+
+
 def test_list_vaults_endpoint() -> None:
     client, stub = _client()
 

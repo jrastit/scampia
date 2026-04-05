@@ -43,13 +43,6 @@ def build_router(vault_service) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{vault_id}", response_model=VaultDetailsResponse)
-    def get_vault_details(vault_id: int):
-        try:
-            return vault_service.get_vault_details(vault_id)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
     @router.post("/import")
     def import_vault(req: ImportVaultRequest):
         try:
@@ -77,6 +70,13 @@ def build_router(vault_service) -> APIRouter:
                 "balance_human": balance / (10 ** decimals),
                 "decimals": decimals,
             }
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.get("/{vault_id}", response_model=VaultDetailsResponse)
+    def get_vault_details(vault_id: int):
+        try:
+            return vault_service.get_vault_details(vault_id)
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
