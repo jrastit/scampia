@@ -168,6 +168,36 @@ Deploy:
 python3 scripts/deploy_vault.py
 ```
 
+Deploy with Foundry (`forge create` + broadcast):
+
+```bash
+set -a && source .env && set +a
+ADMIN_ADDR=$(cast wallet address "$BACKEND_PRIVATE_KEY")
+MANAGER_RECIPIENT="${VAULT_MANAGER_RECIPIENT:-$ADMIN_ADDR}"
+
+forge create contracts/ScampiaVault.sol:ScampiaVault \
+	--rpc-url "$RPC_URL" \
+	--private-key "$BACKEND_PRIVATE_KEY" \
+	--broadcast \
+	--constructor-args "$VAULT_ASSET_TOKEN" "$ADMIN_ADDR" "$MANAGER_RECIPIENT" "$VAULT_MANAGER_FEE_BPS"
+```
+
+After deployment, update these keys in `.env`:
+
+- `VAULT_ADDRESS`
+- `VAULT_MANAGER_ADDRESS`
+
+Quick verification on chain:
+
+```bash
+set -a && source .env && set +a
+cast code "$VAULT_ADDRESS" --rpc-url "$RPC_URL" | head -c 18 && echo
+cast call "$VAULT_ADDRESS" "asset()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "admin()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "managerRecipient()(address)" --rpc-url "$RPC_URL"
+cast call "$VAULT_ADDRESS" "managerFeeBps()(uint16)" --rpc-url "$RPC_URL"
+```
+
 One-shot export + deploy:
 
 ```bash
@@ -219,6 +249,35 @@ forge test
 ```
 
 Current automated API suite covers health, vault routes, trades routes, users routes, and ENS routes.
+
+## OpenAPI
+
+OpenAPI docs are exposed at:
+
+- `/api/v1/openapi.json`
+- `/api/v1/docs`
+
+The main route groups now expose typed response schemas (instead of generic `{}`):
+
+- health
+- users
+- vaults
+- ens
+- trades
+
+Quick local check:
+
+```bash
+./.venv/bin/python - <<'PY'
+from app.main import app
+spec = app.openapi()
+print(spec['paths']['/v1/vaults']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/vaults/{vault_id}']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/users/{wallet_address}/investments']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/ens/config']['get']['responses']['200']['content']['application/json']['schema'])
+print(spec['paths']['/v1/trades/build']['post']['responses']['200']['content']['application/json']['schema'])
+PY
+```
 
 ## Notes
 

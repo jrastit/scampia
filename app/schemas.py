@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List, Optional
 from app.config import settings
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateSafeRequest(BaseModel):
@@ -121,3 +121,110 @@ class ExecuteSafeTxRequest(BaseModel):
     data: str
     value: str = "0"
     operation: int = 0
+
+
+class HealthResponse(BaseModel):
+    ok: bool
+    app: str
+    network: str
+    chainId: int
+    safeTxServiceBase: str
+
+
+class UserResponse(BaseModel):
+    wallet_address: str
+    vault_address: Optional[str] = None
+    safe_address: Optional[str] = None
+    network: Optional[str] = None
+    chain_id: Optional[int] = None
+    created_at: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ConnectWalletResponse(BaseModel):
+    status: str
+    wallet_address: str
+    vault_address: Optional[str] = None
+    safe_address: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class UserInvestmentItem(BaseModel):
+    vault_id: int
+    shares: str
+    value: str
+    profit: str
+
+
+class UserInvestmentsResponse(BaseModel):
+    wallet_address: str
+    items: List[UserInvestmentItem]
+
+
+class VaultListItem(BaseModel):
+    vault_id: int
+    owner: str
+    owner_fee_bps: int
+    asset_token: str
+    total_assets: str
+    total_shares: str
+
+
+class VaultListResponse(BaseModel):
+    items: List[VaultListItem]
+
+
+class VaultDetailsResponse(BaseModel):
+    vault_id: int
+    owner: str
+    owner_fee_bps: int
+    manager_fee_bps: int
+    asset_token: str
+    total_assets: str
+    total_shares: str
+    created_at: Optional[str] = None
+
+
+class VaultPositionResponse(BaseModel):
+    vaultId: str
+    user: str
+    shares: str
+    principal: str
+    estimatedAssets: str
+
+
+class TradeResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class EnsConfigResponse(BaseModel):
+    network: str
+    chainId: int
+    managerAddress: Optional[str] = None
+    parentName: str
+    parentNode: str
+    registryAddress: str
+    publicResolverAddress: str
+
+
+class EnsWriteResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class EnsProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    name: Optional[str] = None
+    node: Optional[str] = None
+    owner: Optional[str] = None
+    resolver: Optional[str] = None
+    address: Optional[str] = None
+    texts: Dict[str, str] = Field(default_factory=dict)
+    network: Optional[str] = None
+    chainId: Optional[int] = None
+
+
+class VaultEnsProfileResponse(EnsProfileResponse):
+    vaultId: Optional[str] = None
+    label: Optional[str] = None
+    configured: Optional[bool] = None

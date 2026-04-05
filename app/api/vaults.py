@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.schemas import VaultDetailsResponse, VaultListResponse, VaultPositionResponse
+
 
 class VaultAmountRequest(BaseModel):
     vault_id: int
@@ -34,14 +36,14 @@ class AgentSwapRequest(BaseModel):
 def build_router(vault_service) -> APIRouter:
     router = APIRouter(prefix="/v1/vaults", tags=["vaults"])
 
-    @router.get("")
+    @router.get("", response_model=VaultListResponse)
     def list_vaults():
         try:
             return vault_service.list_vaults()
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{vault_id}")
+    @router.get("/{vault_id}", response_model=VaultDetailsResponse)
     def get_vault_details(vault_id: int):
         try:
             return vault_service.get_vault_details(vault_id)
@@ -133,7 +135,7 @@ def build_router(vault_service) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.get("/{vault_id}/positions/{user_address}")
+    @router.get("/{vault_id}/positions/{user_address}", response_model=VaultPositionResponse)
     def get_user_position(vault_id: int, user_address: str):
         try:
             return vault_service.get_user_position(vault_id, user_address)

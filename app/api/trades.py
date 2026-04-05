@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException
 
 try:
-    from app.schemas import BuildTradeRequest, UniswapQuoteRequest
+    from app.schemas import BuildTradeRequest, TradeResponse, UniswapQuoteRequest
     from app.services.policy_service import PolicyViolation
     from app.services.simulation_service import SimulationError
 except ImportError:
-    from schemas import BuildTradeRequest, UniswapQuoteRequest
+    from schemas import BuildTradeRequest, TradeResponse, UniswapQuoteRequest
     from policy_service import PolicyViolation
     from simulation_service import SimulationError
 
@@ -13,7 +13,7 @@ except ImportError:
 def build_router(trade_service, settings) -> APIRouter:
     router = APIRouter(prefix="/v1/trades", tags=["trades"])
 
-    @router.post("/quote")
+    @router.post("/quote", response_model=TradeResponse)
     def get_trade_quote(req: UniswapQuoteRequest):
         try:
             wallet_address = req.resolve_wallet_address()
@@ -28,7 +28,7 @@ def build_router(trade_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/build")
+    @router.post("/build", response_model=TradeResponse)
     def build_trade(req: BuildTradeRequest):
         try:
             wallet_address = req.resolve_wallet_address()
@@ -50,7 +50,7 @@ def build_router(trade_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/prepare-vault-tx")
+    @router.post("/prepare-vault-tx", response_model=TradeResponse)
     def prepare_vault_trade(req: BuildTradeRequest):
         try:
             wallet_address = req.resolve_wallet_address()
@@ -76,11 +76,11 @@ def build_router(trade_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/prepare-safe-tx")
+    @router.post("/prepare-safe-tx", response_model=TradeResponse)
     def prepare_safe_trade_compat(req: BuildTradeRequest):
         return prepare_vault_trade(req)
 
-    @router.post("/execute-vault-swap")
+    @router.post("/execute-vault-swap", response_model=TradeResponse)
     def execute_vault_swap(req: BuildTradeRequest):
         try:
             vault_id = req.require_vault_id()
