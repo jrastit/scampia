@@ -104,7 +104,7 @@ def build_router(trade_service, settings) -> APIRouter:
                 amount_in=req.amount_in,
                 slippage_bps=req.slippage_bps,
                 permit_signature=req.permit_signature,
-                user_id = user.id
+
             )
         except PolicyViolation as e:
             raise HTTPException(status_code=403, detail=str(e))
