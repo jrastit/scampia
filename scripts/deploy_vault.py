@@ -5,6 +5,11 @@ from pathlib import Path
 from eth_account import Account
 from web3 import Web3
 
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
+
 ROOT = Path(__file__).resolve().parent.parent
 ABI_FILE = ROOT / "contracts" / "artifacts" / "ScampiaVault.abi.json"
 BYTECODE_FILE = ROOT / "contracts" / "artifacts" / "ScampiaVault.bytecode.txt"
@@ -22,11 +27,10 @@ def load_artifact() -> tuple[list[dict], str]:
 
 
 def main() -> None:
-    rpc_url = os.getenv("RPC_URL", "").strip()
+    rpc_url = settings.rpc_url
     private_key = os.getenv("BACKEND_PRIVATE_KEY", "").strip()
-    asset_token = os.getenv("VAULT_ASSET_TOKEN", "").strip()
-    manager_recipient = os.getenv("VAULT_MANAGER_RECIPIENT", "").strip()
-    manager_fee_bps = int(os.getenv("VAULT_MANAGER_FEE_BPS", "0"))
+    asset_token = settings.vault_asset_token
+    manager_fee_bps = settings.vault_manager_fee_bps
 
     if not rpc_url:
         raise ValueError("RPC_URL is required")
@@ -34,14 +38,13 @@ def main() -> None:
         raise ValueError("BACKEND_PRIVATE_KEY is required")
     if not asset_token:
         raise ValueError("VAULT_ASSET_TOKEN is required")
-    if not manager_recipient:
-        raise ValueError("VAULT_MANAGER_RECIPIENT is required")
 
     w3 = Web3(Web3.HTTPProvider(rpc_url))
     if not w3.is_connected():
         raise RuntimeError("Unable to connect to RPC")
 
     account = Account.from_key(private_key)
+    manager_recipient = os.getenv("VAULT_MANAGER_RECIPIENT", "").strip() or account.address
     chain_id = w3.eth.chain_id
 
     abi, bytecode = load_artifact()

@@ -64,7 +64,7 @@ for _yaml_path in _yaml_candidates:
 
 
 def _get(yaml_keys: list[str], env_key: str = "", default: Any = "") -> Any:
-    """Read from env first, then YAML, then default."""
+    """Read from env when provided, then YAML, then default."""
     if env_key:
         env_val = os.getenv(env_key)
         if env_val is not None:
@@ -93,13 +93,13 @@ class Settings:
     network: str = NETWORK
 
     # ── Chain ──
-    rpc_url: str = str(os.getenv("RPC_URL", str(NETWORKS[NETWORK]["rpc_url"])))
-    chain_id: int = int(os.getenv("CHAIN_ID", str(NETWORKS[NETWORK]["chain_id"])))
+    rpc_url: str = str(_get(["chain", "rpc_url"], "RPC_URL", str(NETWORKS[NETWORK]["rpc_url"])))
+    chain_id: int = int(_get(["chain", "id"], "CHAIN_ID", str(NETWORKS[NETWORK]["chain_id"])))
 
     # ── Safe ──
     safe_address: str = str(_get(["safe", "address"], "SAFE_ADDRESS", ""))
     safe_tx_service_base: str = str(
-        os.getenv("SAFE_TX_SERVICE_BASE", str(NETWORKS[NETWORK]["safe_tx_service_base"]))
+        _get(["safe", "tx_service"], "SAFE_TX_SERVICE_BASE", str(NETWORKS[NETWORK]["safe_tx_service_base"]))
     )
     safe_api_key: str = os.getenv("SAFE_API_KEY", "")
 
@@ -123,7 +123,9 @@ class Settings:
 
     # ── Uniswap ──
     uniswap_api_key: str = os.getenv("UNISWAP_API_KEY", "")
-    uniswap_api_base: str = os.getenv("UNISWAP_API_BASE", "https://trade-api.gateway.uniswap.org")
+    uniswap_api_base: str = str(
+        _get(["uniswap", "api_base"], "UNISWAP_API_BASE", "https://trade-api.gateway.uniswap.org")
+    )
     uniswap_swap_router: str = str(
         _get(["uniswap", "swap_router"], "UNISWAP_SWAP_ROUTER", "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E")
     )
@@ -162,16 +164,10 @@ class Settings:
     # ── Policy defaults ──
     @property
     def default_allowed_tokens_in(self) -> list[str]:
-        raw = os.getenv("TRADE_ALLOWED_TOKENS_IN", "")
-        if raw:
-            return [t.strip() for t in raw.split(",") if t.strip()]
         return _get(["policy", "allowed_tokens_in"], default=[]) or [self.usdc_address]
 
     @property
     def default_allowed_tokens_out(self) -> list[str]:
-        raw = os.getenv("TRADE_ALLOWED_TOKENS_OUT", "")
-        if raw:
-            return [t.strip() for t in raw.split(",") if t.strip()]
         return _get(["policy", "allowed_tokens_out"], default=[]) or [self.weth_address]
 
     @property
@@ -180,12 +176,7 @@ class Settings:
 
     @property
     def default_max_input_per_tx(self) -> int:
-        return int(
-            os.getenv(
-                "TRADE_MAX_INPUT_PER_TX",
-                str(_get(["policy", "max_input_per_tx"], default=1_000_000_000)),
-            )
-        )
+        return int(_get(["policy", "max_input_per_tx"], default=1_000_000_000))
 
     # Backward-compatible aliases used elsewhere in the codebase
     @property
