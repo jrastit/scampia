@@ -32,6 +32,13 @@ class UserService:
         # If an owner created multiple vaults, expose the latest id.
         return max(matching_ids)
 
+    def _find_latest_vault_id(self) -> Optional[int]:
+        vaults_payload = self.vault_service.list_vaults()
+        ids = [int(vault["vault_id"]) for vault in vaults_payload.get("items", [])]
+        if not ids:
+            return None
+        return max(ids)
+
     def _build_vault_sync_payload(self, wallet_address: str) -> Dict[str, Any]:
         try:
             vault_id = self._find_vault_id_by_owner(wallet_address)
@@ -44,6 +51,19 @@ class UserService:
             }
 
         if vault_id is None:
+            try:
+                latest_vault_id = self._find_latest_vault_id()
+            except Exception:
+                latest_vault_id = None
+
+            if latest_vault_id is not None:
+                return {
+                    "vault_id": latest_vault_id,
+                    "pending_sync": False,
+                    "retry_after_seconds": 0,
+                    "sync_source": "global_latest",
+                }
+
             return {
                 "vault_id": None,
                 "pending_sync": True,

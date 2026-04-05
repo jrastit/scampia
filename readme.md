@@ -115,6 +115,18 @@ If `vault_id` is not yet observed via on-chain scan, responses return:
 }
 ```
 
+When no owner match is found for the requested wallet but vaults exist on-chain,
+the API falls back to the latest global vault id and returns:
+
+```json
+{
+	"vault_id": 123,
+	"pending_sync": false,
+	"retry_after_seconds": 0,
+	"sync_source": "global_latest"
+}
+```
+
 `GET /v1/users/{wallet_address}/investments` response shape:
 
 ```json
