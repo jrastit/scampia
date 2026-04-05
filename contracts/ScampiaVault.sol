@@ -9,6 +9,7 @@ interface IERC20 {
 
 contract ScampiaVault {
     IERC20 public immutable asset;
+    bool public immutable isNativeAsset;
     address public admin;
     address public managerRecipient;
     bool public paused;
@@ -84,11 +85,11 @@ contract ScampiaVault {
     }
 
     constructor(address assetToken, address initialAdmin, address initialManagerRecipient, uint16 initialManagerFeeBps) {
-        require(assetToken != address(0), "asset=0");
         require(initialAdmin != address(0), "admin=0");
         require(initialManagerRecipient != address(0), "manager=0");
         require(initialManagerFeeBps <= MAX_BPS, "manager fee too high");
         asset = IERC20(assetToken);
+        isNativeAsset = assetToken == address(0);
         admin = initialAdmin;
         managerRecipient = initialManagerRecipient;
         managerFeeBps = initialManagerFeeBps;
@@ -151,6 +152,7 @@ contract ScampiaVault {
 
     function deposit(uint256 vaultId, uint256 assets, address receiver)
         external
+        payable
         whenNotPaused
         nonReentrant
         returns (uint256 mintedShares)
@@ -167,7 +169,7 @@ contract ScampiaVault {
         userShares[vaultId][receiver] += mintedShares;
         userPrincipal[vaultId][receiver] += assets;
 
-        _safeTransferFrom(address(asset), msg.sender, address(this), assets);
+        _pullAssetFromSender(assets);
 
         emit Deposited(vaultId, msg.sender, receiver, assets, mintedShares);
     }
@@ -219,12 +221,12 @@ contract ScampiaVault {
         userAssets = grossAssets - ownerFee - managerFee;
 
         if (ownerFee > 0) {
-            _safeTransfer(address(asset), v.owner, ownerFee);
+            _transferAsset(v.owner, ownerFee);
         }
         if (managerFee > 0) {
-            _safeTransfer(address(asset), managerRecipient, managerFee);
+            _transferAsset(managerRecipient, managerFee);
         }
-        _safeTransfer(address(asset), receiver, userAssets);
+        _transferAsset(receiver, userAssets);
 
         emit Withdrawn(
             vaultId,
@@ -248,10 +250,10 @@ contract ScampiaVault {
     ) external onlyAdmin whenNotPaused nonReentrant returns (int256 assetDelta) {
         Vault storage v = _vault(vaultId);
         require(allowedTargets[target], "target not allowed");
-        uint256 beforeBal = asset.balanceOf(address(this));
+        uint256 beforeBal = _assetBalance();
         (bool ok,) = target.call{value: value}(data);
         require(ok, "swap failed");
-        uint256 afterBal = asset.balanceOf(address(this));
+        uint256 afterBal = _assetBalance();
 
         if (afterBal >= beforeBal) {
             uint256 gain = afterBal - beforeBal;
@@ -319,6 +321,31 @@ contract ScampiaVault {
             abi.encodeWithSignature("transferFrom(address,address,uint256)", from, to, value)
         );
         require(ok && (data.length == 0 || abi.decode(data, (bool))), "transferFrom failed");
+    }
+
+    function _assetBalance() internal view returns (uint256) {
+        if (isNativeAsset) {
+            return address(this).balance;
+        }
+        return asset.balanceOf(address(this));
+    }
+
+    function _pullAssetFromSender(uint256 assets) internal {
+        if (isNativeAsset) {
+            require(msg.value == assets, "msg.value mismatch");
+            return;
+        }
+        require(msg.value == 0, "native value not accepted");
+        _safeTransferFrom(address(asset), msg.sender, address(this), assets);
+    }
+
+    function _transferAsset(address to, uint256 value) internal {
+        if (isNativeAsset) {
+            (bool ok,) = payable(to).call{value: value}("");
+            require(ok, "native transfer failed");
+            return;
+        }
+        _safeTransfer(address(asset), to, value);
     }
 
     receive() external payable {}

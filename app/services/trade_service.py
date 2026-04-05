@@ -27,6 +27,12 @@ class TradeService:
         self.simulation_service = simulation_service
         self.vault_service = vault_service
 
+    def _allow_native_tokens(self) -> bool:
+        try:
+            return self.vault_service.is_native_asset_mode()
+        except Exception:
+            return False
+
     @staticmethod
     def _normalize_swap_tx(swap: Dict[str, Any]) -> Dict[str, str]:
         tx = (
@@ -111,6 +117,7 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or wallet_address
+        allow_native_tokens = self._allow_native_tokens()
         self.policy_service.validate_trade(
             vault_address=wallet_address,
             recipient=recipient,
@@ -120,6 +127,7 @@ class TradeService:
             allowed_tokens_in=allowed_tokens_in or [],
             allowed_tokens_out=allowed_tokens_out or [],
             max_input_per_tx=max_input_per_tx,
+            allow_native_tokens=allow_native_tokens,
         )
 
         quote_response = self.uniswap_service.get_quote(
@@ -185,6 +193,7 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or wallet_address
+        allow_native_tokens = self._allow_native_tokens()
         self.policy_service.validate_trade(
             vault_address=wallet_address,
             recipient=recipient,
@@ -194,6 +203,7 @@ class TradeService:
             allowed_tokens_in=allowed_tokens_in or [],
             allowed_tokens_out=allowed_tokens_out or [],
             max_input_per_tx=max_input_per_tx,
+            allow_native_tokens=allow_native_tokens,
         )
 
         quote_response = self.uniswap_service.get_quote(
