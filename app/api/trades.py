@@ -56,7 +56,7 @@ def build_router(trade_service, settings) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/prepare-safe-tx")
-    def prepare_safe_trade(req: BuildTradeRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    def prepare_vault_trade(req: BuildTradeRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
         api_key = credentials.credentials
         user = user_data.get_user_by_api_key(api_key)
         if not user:
@@ -89,7 +89,7 @@ def build_router(trade_service, settings) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/prepare-safe-tx")
-    def prepare_safe_trade_compat(req: BuildTradeRequest):
+    def prepare_vault_trade_compat(req: BuildTradeRequest):
         return prepare_vault_trade(req)
 
     @router.post("/execute-vault-swap")

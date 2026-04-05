@@ -230,6 +230,10 @@ class Settings:
     @property
     def authorized_tokens(self) -> list[str]:
         return _get(["policy", "authorized_tokens"], default=[])
+    
+    @property
+    def open_claw_config(self) -> str:
+        return _get(["config", "open_claw_config"], default="")
 
 
 settings = Settings()
