@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.schemas import VaultDetailsResponse, VaultListResponse, VaultPositionResponse
@@ -73,11 +73,20 @@ def build_router(vault_service) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    @router.get("/{vault_id}/deposit/allowance/{owner_address}")
+    def get_deposit_allowance(vault_id: int, owner_address: str, amount: int = Query(default=0, ge=0)):
+        try:
+            return vault_service.get_deposit_precheck(vault_id, owner_address, amount)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     @router.get("/{vault_id}", response_model=VaultDetailsResponse)
     def get_vault_details(vault_id: int):
         try:
             return vault_service.get_vault_details(vault_id)
         except Exception as e:
+            if "vault not found" in str(e).lower():
+                raise HTTPException(status_code=404, detail="Vault not found")
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/create/build")
