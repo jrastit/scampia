@@ -13,12 +13,16 @@ contract MockENSRegistry {
     function setSubnodeRecord(
         bytes32 node,
         bytes32 label,
-        address owner,
-        address resolver,
+        address recordOwner,
+        address recordResolver,
         uint64 ttl
     ) external {
         bytes32 subnode = keccak256(abi.encodePacked(node, label));
-        records[subnode] = Record({owner: owner, resolver: resolver, ttl: ttl});
+        records[subnode] = Record({owner: recordOwner, resolver: recordResolver, ttl: ttl});
+    }
+
+    function setOwner(bytes32 node, address newOwner) external {
+        records[node].owner = newOwner;
     }
 
     function owner(bytes32 node) external view returns (address) {
