@@ -5,12 +5,16 @@ import "forge-std/Test.sol";
 
 import {ScampiaVault} from "../contracts/ScampiaVault.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockENSRegistry} from "./mocks/MockENSRegistry.sol";
+import {MockENSResolver} from "./mocks/MockENSResolver.sol";
 import {MockTarget} from "./mocks/MockTarget.sol";
 
 contract ScampiaVaultTest is Test {
     MockERC20 internal token;
     ScampiaVault internal vault;
     MockTarget internal target;
+    MockENSRegistry internal registry;
+    MockENSResolver internal resolver;
 
     address internal admin = address(0xA11CE);
     address internal manager = address(0xB0B);
@@ -22,6 +26,8 @@ contract ScampiaVaultTest is Test {
         token = new MockERC20();
         vault = new ScampiaVault(address(token), admin, manager, 500); // 5%
         target = new MockTarget();
+        registry = new MockENSRegistry();
+        resolver = new MockENSResolver();
         vault.setAllowedTarget(address(target), true);
         vm.stopPrank();
 
@@ -33,6 +39,11 @@ contract ScampiaVaultTest is Test {
     function _createVault(uint16 ownerFeeBps) internal returns (uint256 vaultId) {
         vm.prank(owner);
         vaultId = vault.createVault(ownerFeeBps);
+    }
+
+    function _namehash(string memory parent, string memory label) internal pure returns (bytes32) {
+        bytes32 parentNode = keccak256(abi.encodePacked(bytes32(0), keccak256(bytes(parent))));
+        return keccak256(abi.encodePacked(parentNode, keccak256(bytes(label))));
     }
 
     function testCreateDepositWithdrawOwnerNoFee() external {
@@ -96,5 +107,45 @@ contract ScampiaVaultTest is Test {
         vm.expectRevert("not admin");
         vm.prank(alice);
         vault.executeTrade(vaultId, address(target), 0, data, 0);
+    }
+
+    function testRegisterVaultEnsSetsContractOwnedProfile() external {
+        uint256 vaultId = _createVault(500);
+        bytes32 parentNode = _namehash("eth", "scampia");
+
+        vm.prank(admin);
+        vault.setEnsConfig(address(registry), address(resolver), parentNode);
+
+        vm.prank(admin);
+        bytes32 node = vault.registerVaultEns(vaultId, "agent-1");
+
+        (bytes32 storedNode, string memory label) = vault.getVaultEnsRecord(vaultId);
+
+        assertEq(storedNode, node);
+        assertEq(label, "agent-1");
+        assertEq(registry.owner(node), address(vault));
+        assertEq(registry.resolver(node), address(resolver));
+        assertEq(resolver.addr(node), address(vault));
+    }
+
+    function testSetVaultEnsTextsWritesPolicyMetadata() external {
+        uint256 vaultId = _createVault(500);
+        bytes32 parentNode = _namehash("eth", "scampia");
+
+        vm.startPrank(admin);
+        vault.setEnsConfig(address(registry), address(resolver), parentNode);
+        bytes32 node = vault.registerVaultEns(vaultId, "agent-2");
+
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "stop_loss_pct";
+        values[0] = "30";
+        keys[1] = "authorized_tokens";
+        values[1] = "[\"ETH\",\"USDC\"]";
+        vault.setVaultEnsTexts(vaultId, keys, values);
+        vm.stopPrank();
+
+        assertEq(resolver.text(node, "stop_loss_pct"), "30");
+        assertEq(resolver.text(node, "authorized_tokens"), "[\"ETH\",\"USDC\"]");
     }
 }

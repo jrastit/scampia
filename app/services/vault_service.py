@@ -42,6 +42,54 @@ VAULT_ABI = [
     },
     {
         "inputs": [
+            {"name": "registry", "type": "address"},
+            {"name": "resolver", "type": "address"},
+            {"name": "parentNode", "type": "bytes32"},
+        ],
+        "name": "setEnsConfig",
+        "outputs": [],
+        "type": "function",
+    },
+    {
+        "inputs": [
+            {"name": "vaultId", "type": "uint256"},
+            {"name": "label", "type": "string"},
+        ],
+        "name": "registerVaultEns",
+        "outputs": [{"name": "node", "type": "bytes32"}],
+        "type": "function",
+    },
+    {
+        "inputs": [
+            {"name": "vaultId", "type": "uint256"},
+            {"name": "key", "type": "string"},
+            {"name": "value", "type": "string"},
+        ],
+        "name": "setVaultEnsText",
+        "outputs": [],
+        "type": "function",
+    },
+    {
+        "inputs": [
+            {"name": "vaultId", "type": "uint256"},
+            {"name": "keys", "type": "string[]"},
+            {"name": "values", "type": "string[]"},
+        ],
+        "name": "setVaultEnsTexts",
+        "outputs": [],
+        "type": "function",
+    },
+    {
+        "inputs": [{"name": "vaultId", "type": "uint256"}],
+        "name": "getVaultEnsRecord",
+        "outputs": [
+            {"name": "node", "type": "bytes32"},
+            {"name": "label", "type": "string"},
+        ],
+        "type": "function",
+    },
+    {
+        "inputs": [
             {"name": "vaultId", "type": "uint256"},
             {"name": "assets", "type": "uint256"},
             {"name": "receiver", "type": "address"},

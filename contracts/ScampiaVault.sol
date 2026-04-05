@@ -7,6 +7,15 @@ interface IERC20 {
     function balanceOf(address account) external view returns (uint256);
 }
 
+interface IENSRegistry {
+    function setSubnodeRecord(bytes32 node, bytes32 label, address owner, address resolver, uint64 ttl) external;
+}
+
+interface IENSResolver {
+    function setAddr(bytes32 node, address a) external;
+    function setText(bytes32 node, string calldata key, string calldata value) external;
+}
+
 contract ScampiaVault {
     IERC20 public immutable asset;
     address public admin;
@@ -14,9 +23,13 @@ contract ScampiaVault {
     bool public paused;
     uint16 public managerFeeBps;
     uint16 public constant MAX_BPS = 10_000;
+    bytes32 private constant ZERO_NODE = bytes32(0);
 
     mapping(address => bool) public allowedTargets;
     uint256 public vaultCount;
+    address public ensRegistry;
+    address public ensResolver;
+    bytes32 public ensParentNode;
 
     struct Vault {
         address owner;
@@ -29,6 +42,9 @@ contract ScampiaVault {
     mapping(uint256 => Vault) public vaults;
     mapping(uint256 => mapping(address => uint256)) public userShares;
     mapping(uint256 => mapping(address => uint256)) public userPrincipal;
+    mapping(uint256 => bytes32) public vaultEnsNode;
+    mapping(uint256 => string) public vaultEnsLabel;
+    mapping(bytes32 => uint256) public ensNodeVaultId;
 
     uint256 private _entered;
 
@@ -65,6 +81,9 @@ contract ScampiaVault {
     event ManagerRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event ManagerFeeUpdated(uint16 managerFeeBps);
     event PauseUpdated(bool paused);
+    event EnsConfigUpdated(address indexed registry, address indexed resolver, bytes32 indexed parentNode);
+    event VaultEnsRegistered(uint256 indexed vaultId, bytes32 indexed node, string label);
+    event VaultEnsTextUpdated(uint256 indexed vaultId, bytes32 indexed node, string key, string value);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "not admin");
@@ -128,6 +147,16 @@ contract ScampiaVault {
         emit TargetUpdated(target, allowed);
     }
 
+    function setEnsConfig(address registry, address resolver, bytes32 parentNode) external onlyAdmin {
+        require(registry != address(0), "registry=0");
+        require(resolver != address(0), "resolver=0");
+        require(parentNode != ZERO_NODE, "parentNode=0");
+        ensRegistry = registry;
+        ensResolver = resolver;
+        ensParentNode = parentNode;
+        emit EnsConfigUpdated(registry, resolver, parentNode);
+    }
+
     function createVault(uint16 ownerFeeBps) external whenNotPaused returns (uint256 vaultId) {
         require(ownerFeeBps <= MAX_BPS, "owner fee too high");
         vaultId = ++vaultCount;
@@ -147,6 +176,60 @@ contract ScampiaVault {
         require(ownerFeeBps <= MAX_BPS, "owner fee too high");
         v.ownerFeeBps = ownerFeeBps;
         emit OwnerFeeUpdated(vaultId, ownerFeeBps);
+    }
+
+    function registerVaultEns(uint256 vaultId, string calldata label)
+        external
+        onlyAdmin
+        whenNotPaused
+        returns (bytes32 node)
+    {
+        _vault(vaultId);
+        _requireEnsConfig();
+        require(bytes(label).length != 0, "label=0");
+        require(vaultEnsNode[vaultId] == ZERO_NODE, "ens already set");
+
+        bytes32 labelHash = keccak256(bytes(label));
+        node = keccak256(abi.encodePacked(ensParentNode, labelHash));
+        require(ensNodeVaultId[node] == 0, "ens label used");
+
+        IENSRegistry(ensRegistry).setSubnodeRecord(
+            ensParentNode,
+            labelHash,
+            address(this),
+            ensResolver,
+            0
+        );
+        IENSResolver(ensResolver).setAddr(node, address(this));
+
+        vaultEnsNode[vaultId] = node;
+        vaultEnsLabel[vaultId] = label;
+        ensNodeVaultId[node] = vaultId;
+
+        emit VaultEnsRegistered(vaultId, node, label);
+    }
+
+    function setVaultEnsText(uint256 vaultId, string calldata key, string calldata value)
+        external
+        onlyAdmin
+        whenNotPaused
+    {
+        bytes32 node = _vaultEnsNode(vaultId);
+        _setVaultEnsText(vaultId, node, key, value);
+    }
+
+    function setVaultEnsTexts(
+        uint256 vaultId,
+        string[] calldata keys,
+        string[] calldata values
+    ) external onlyAdmin whenNotPaused {
+        bytes32 node = _vaultEnsNode(vaultId);
+        uint256 length = keys.length;
+        require(length == values.length, "length mismatch");
+
+        for (uint256 i = 0; i < length; ++i) {
+            _setVaultEnsText(vaultId, node, keys[i], values[i]);
+        }
     }
 
     function deposit(uint256 vaultId, uint256 assets, address receiver)
@@ -290,9 +373,32 @@ contract ScampiaVault {
         return _sharesToAssets(v, sharesAmount);
     }
 
+    function getVaultEnsRecord(uint256 vaultId) external view returns (bytes32 node, string memory label) {
+        node = vaultEnsNode[vaultId];
+        label = vaultEnsLabel[vaultId];
+    }
+
     function _vault(uint256 vaultId) internal view returns (Vault storage v) {
         v = vaults[vaultId];
         require(v.exists, "vault not found");
+    }
+
+    function _vaultEnsNode(uint256 vaultId) internal view returns (bytes32 node) {
+        _vault(vaultId);
+        node = vaultEnsNode[vaultId];
+        require(node != ZERO_NODE, "ens not set");
+    }
+
+    function _requireEnsConfig() internal view {
+        require(ensRegistry != address(0), "ens registry=0");
+        require(ensResolver != address(0), "ens resolver=0");
+        require(ensParentNode != ZERO_NODE, "ens parent=0");
+    }
+
+    function _setVaultEnsText(uint256 vaultId, bytes32 node, string calldata key, string calldata value) internal {
+        require(bytes(key).length != 0, "key=0");
+        IENSResolver(ensResolver).setText(node, key, value);
+        emit VaultEnsTextUpdated(vaultId, node, key, value);
     }
 
     function _assetsToShares(Vault storage v, uint256 assets) internal view returns (uint256) {
