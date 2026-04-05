@@ -43,6 +43,7 @@ Base prefix: `/api`
 - `POST /v1/vaults/import`
 - `GET /v1/vaults/balances`
 - `GET /v1/vaults/balance/{token_address}`
+- `GET /v1/vaults/{vault_id}/deposit/allowance/{owner_address}`
 - `POST /v1/vaults/create/build`
 - `POST /v1/vaults/deposit/build`
 - `POST /v1/vaults/withdraw/build`
@@ -89,8 +90,25 @@ Base prefix: `/api`
 - `GET /v1/users/{wallet_address}/vault-sync`
 - `GET /v1/users/{wallet_address}/investments`
 - `GET /v1/users`
+- `POST /v1/users/config`
 
-`POST /v1/users/connect` and `GET /v1/users/{wallet_address}` include vault sync fields:
+`POST /v1/users/connect` response shape:
+
+```json
+{
+	"status": "connected",
+	"wallet_address": "0x...",
+	"vault_address": "0x...",
+	"safe_address": "0x...",
+	"vault_id": 12,
+	"pending_sync": false,
+	"retry_after_seconds": 0,
+	"sync_source": "onchain_scan",
+	"created_at": "2026-04-05T12:00:00Z"
+}
+```
+
+`GET /v1/users/{wallet_address}` response shape:
 
 ```json
 {
@@ -100,7 +118,11 @@ Base prefix: `/api`
 	"vault_id": 12,
 	"pending_sync": false,
 	"retry_after_seconds": 0,
-	"sync_source": "onchain_scan"
+	"sync_source": "onchain_scan",
+	"network": "ethereum-sepolia",
+	"chain_id": 11155111,
+	"created_at": "2026-04-05T12:00:00Z",
+	"is_active": true
 }
 ```
 
@@ -159,8 +181,7 @@ the API falls back to the latest global vault id and returns:
 
 - `POST /v1/trades/quote`
 - `POST /v1/trades/build`
-- `POST /v1/trades/prepare-vault-tx`
-- `POST /v1/trades/prepare-safe-tx` (compat alias)
+- `POST /v1/trades/prepare-safe-tx` (Bearer API key required)
 - `POST /v1/trades/execute-vault-swap`
 
 ## Quick local run
