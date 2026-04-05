@@ -54,6 +54,13 @@ VAULT_ABI = [
     },
     {
         "inputs": [],
+        "name": "isNativeAsset",
+        "outputs": [{"name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function",
+    },
+    {
+        "inputs": [],
         "name": "vaultCount",
         "outputs": [{"name": "", "type": "uint256"}],
         "stateMutability": "view",
@@ -161,6 +168,14 @@ class VaultService:
     def _vault_contract(self):
         return self.w3.eth.contract(address=self.manager_contract_address(), abi=VAULT_ABI)
 
+    def is_native_asset_mode(self) -> bool:
+        vault = self._vault_contract()
+        try:
+            return bool(vault.functions.isNativeAsset().call())
+        except Exception:
+            asset_token = vault.functions.asset().call()
+            return int(asset_token, 16) == 0
+
     def _format_created_at(self, block_timestamp: int) -> str:
         return datetime.fromtimestamp(block_timestamp, tz=timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -168,19 +183,27 @@ class VaultService:
         topic0 = self.w3.keccak(text="VaultCreated(uint256,address,uint16)").hex()
         topic1 = "0x" + vault_id.to_bytes(32, "big").hex()
 
-        # Some RPC providers limit historical filters; silently degrade to null.
-        logs = self.w3.eth.get_logs(
-            {
-                "address": self.manager_contract_address(),
-                "fromBlock": 0,
-                "toBlock": "latest",
-                "topics": [topic0, topic1],
-            }
-        )
+        # Some RPC providers reject broad historical getLogs queries; degrade to null.
+        try:
+            logs = self.w3.eth.get_logs(
+                {
+                    "address": self.manager_contract_address(),
+                    "fromBlock": 0,
+                    "toBlock": "latest",
+                    "topics": [topic0, topic1],
+                }
+            )
+        except Exception:
+            return None
+
         if not logs:
             return None
 
-        block = self.w3.eth.get_block(logs[-1]["blockNumber"])
+        try:
+            block = self.w3.eth.get_block(logs[-1]["blockNumber"])
+        except Exception:
+            return None
+
         return self._format_created_at(int(block["timestamp"]))
 
     def _read_vault(self, vault_id: int) -> Dict[str, Any]:
@@ -259,8 +282,28 @@ class VaultService:
             raise ValueError("amount must be >= 0")
 
         asset_token = self._vault_contract().functions.asset().call()
+        is_native_asset = self.is_native_asset_mode()
+        owner = self._checksum(owner_address)
         spender = self.manager_contract_address()
-        allowance = self.get_token_allowance(asset_token, owner_address, spender)
+
+        if is_native_asset:
+            owner_native_balance = int(self.w3.eth.get_balance(owner))
+            return {
+                "vaultId": vault_id,
+                "assetToken": self._checksum(asset_token),
+                "assetSymbol": "ETH",
+                "assetDecimals": 18,
+                "isNativeAsset": True,
+                "owner": owner,
+                "spender": spender,
+                "amount": str(amount),
+                "value": str(amount),
+                "allowance": str(owner_native_balance),
+                "allowanceSufficient": owner_native_balance >= amount,
+                "requiresApproval": False,
+            }
+
+        allowance = self.get_token_allowance(asset_token, owner, spender)
         decimals = self.get_token_decimals(asset_token)
         symbol = self.get_token_symbol(asset_token)
 
@@ -269,11 +312,14 @@ class VaultService:
             "assetToken": self._checksum(asset_token),
             "assetSymbol": symbol,
             "assetDecimals": decimals,
-            "owner": self._checksum(owner_address),
+            "isNativeAsset": False,
+            "owner": owner,
             "spender": spender,
             "amount": str(amount),
+            "value": "0",
             "allowance": str(allowance),
             "allowanceSufficient": allowance >= amount,
+            "requiresApproval": True,
         }
 
     def get_all_balances(self) -> Dict[str, Any]:
@@ -332,14 +378,16 @@ class VaultService:
 
     def build_deposit_tx(self, vault_id: int, amount: int, receiver: str) -> Dict[str, Any]:
         vault = self._vault_contract()
+        is_native_asset = self.is_native_asset_mode()
         calldata = vault.encode_abi("deposit", args=[vault_id, amount, self._checksum(receiver)])
         return {
             "managerAddress": self.manager_contract_address(),
             "vaultId": vault_id,
             "to": self.manager_contract_address(),
             "data": calldata,
-            "value": "0",
+            "value": str(amount if is_native_asset else 0),
             "amount": str(amount),
+            "isNativeAsset": is_native_asset,
             "receiver": self._checksum(receiver),
         }
 
