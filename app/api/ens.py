@@ -29,7 +29,7 @@ except ImportError:
 PROFILE_TEXT_KEYS = [
     "stop_loss_pct",
     "take_profit_pct",
-    "max_open_positions",
+    # "max_open_positions",
     "min_eth_balance",
     "max_slippage_tolerance_pct",
     "max_gas_price_gwei",

@@ -46,10 +46,10 @@ class PolicyService:
         # if stop_loss_pct < stop_loss_pct_permission: à voir pour monitorer ça tout le temps / paramétrer dans le trade uniswap?
         #     return
         # take_profit_pct, pareil pour lui
-        get_max_open_positions_permission = 3
-        get_open_positions_per_agent = 2
-        if get_max_open_positions_permission >= get_open_positions_per_agent:
-            return False
+        # get_max_open_positions_permission = 3
+        # get_open_positions_per_agent = 2
+        # if get_max_open_positions_permission >= get_open_positions_per_agent:
+        #     return False
         get_safe_sold = 10
         # à voir ce qu'on met ici aussi pour faire la conversion si y'en a une
         get_min_eth_balance = 0.01

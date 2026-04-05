@@ -19,7 +19,6 @@ class ImportSafeRequest(BaseModel):
 class VaultEnsPolicyUpdateRequest(BaseModel):
     stop_loss_pct: Optional[float] = None
     take_profit_pct: Optional[float] = None
-    max_open_positions: Optional[int] = None
     min_eth_balance: Optional[float] = None
     max_slippage_tolerance_pct: Optional[float] = None
     max_gas_price_gwei: Optional[float] = None
@@ -35,10 +34,10 @@ class VaultEnsPolicyUpdateRequest(BaseModel):
             records["take_profit_pct"] = self._format_number(self.take_profit_pct)
         else:
             records["take_profit_pct"] = settings.take_profit_pct
-        if self.max_open_positions is not None:
-            records["max_open_positions"] = str(self.max_open_positions)
-        else:
-            records["max_open_positions"] = settings.max_open_positions
+        # if self.max_open_positions is not None:
+        #     records["max_open_positions"] = str(self.max_open_positions)
+        # else:
+        #     records["max_open_positions"] = settings.max_open_positions
         if self.min_eth_balance is not None:
             records["min_eth_balance"] = self._format_number(self.min_eth_balance)
         else:
