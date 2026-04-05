@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 interface IENSRegistry {
     function setSubnodeRecord(bytes32 node, bytes32 label, address owner, address resolver, uint64 ttl) external;
+    function setOwner(bytes32 node, address owner) external;
     function owner(bytes32 node) external view returns (address);
 }
 
@@ -33,6 +34,7 @@ contract ScampiaENSManager {
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
     event VaultContractUpdated(address indexed previousVaultContract, address indexed newVaultContract);
     event EnsConfigUpdated(address indexed registry, address indexed resolver, bytes32 indexed parentNode);
+    event ParentNodeOwnershipTransferred(bytes32 indexed parentNode, address indexed newOwner);
     event VaultEnsRegistered(uint256 indexed vaultId, bytes32 indexed node, string label);
     event VaultEnsTextUpdated(uint256 indexed vaultId, bytes32 indexed node, string key, string value);
 
@@ -77,6 +79,13 @@ contract ScampiaENSManager {
             require(newVaultContract != address(0), "vault=0");
         }
         emit EnsConfigUpdated(registry, resolver, parentNode);
+    }
+
+    function transferParentNodeOwnership(address newOwner) external onlyAdmin {
+        require(newOwner != address(0), "owner=0");
+        _requireEnsConfig();
+        IENSRegistry(ensRegistry).setOwner(ensParentNode, newOwner);
+        emit ParentNodeOwnershipTransferred(ensParentNode, newOwner);
     }
 
     function registerVaultEns(uint256 vaultId, string calldata label) external onlyAdmin returns (bytes32 node) {

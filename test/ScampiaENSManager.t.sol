@@ -18,6 +18,7 @@ contract ScampiaENSManagerTest is Test {
 
     address internal admin = address(0xA11CE);
     address internal owner = address(0xC0DE);
+    address internal recoveryOwner = address(0xBEEF);
 
     function setUp() external {
         vm.startPrank(admin);
@@ -85,5 +86,17 @@ contract ScampiaENSManagerTest is Test {
 
         assertEq(resolver.text(node, "stop_loss_pct"), "30");
         assertEq(resolver.text(node, "authorized_tokens"), "[\"ETH\",\"USDC\"]");
+    }
+
+    function testAdminCanTransferParentNodeOwnership() external {
+        bytes32 parentNode = _namehash("scampia.eth");
+
+        vm.prank(admin);
+        manager.setEnsConfig(address(registry), address(resolver), parentNode, address(vault));
+
+        vm.prank(admin);
+        manager.transferParentNodeOwnership(recoveryOwner);
+
+        assertEq(registry.owner(parentNode), recoveryOwner);
     }
 }
