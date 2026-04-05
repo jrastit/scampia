@@ -38,7 +38,11 @@ class TradeService:
         )
         to = swap.get("to") or tx.get("to")
         data = swap.get("data") if "data" in swap else tx.get("data")
-        value = str(swap.get("value") or tx.get("value") or "0")
+        raw_value = swap.get("value") or tx.get("value") or "0"
+        if isinstance(raw_value, str) and raw_value.startswith("0x"):
+            value = str(int(raw_value, 16))
+        else:
+            value = str(raw_value)
 
         if not to:
             raise ValueError("swap response missing destination address")
@@ -55,6 +59,24 @@ class TradeService:
         if normalized in {"DUTCH_V2", "DUTCH_V3", "PRIORITY", "DUTCH_LIMIT", "LIMIT_ORDER"}:
             return "order"
         raise ValueError(f"unsupported routing from quote: {routing}")
+    
+    @staticmethod
+    def _sign_permit(permit_data: dict) -> str:
+        from eth_account import Account
+
+        key = settings.backend_private_key
+        account = Account.from_key(key)
+        domain = permit_data["domain"]
+        types = {k: v for k, v in permit_data["types"].items() if k != "EIP712Domain"}
+        values = permit_data["values"]
+
+        signed = account.sign_typed_data(
+            domain_data=domain,
+            message_types=types,
+            message_data=values,
+        )
+        return "0x" + signed.signature.hex()
+    
 
     def quote_trade(
         self,
@@ -194,7 +216,7 @@ class TradeService:
             raise ValueError("prepare-vault-tx only supports swap routes (CLASSIC/WRAP/UNWRAP/BRIDGE)")
 
         if permit_data is not None and not permit_signature:
-            raise ValueError("permit signature required for this quote")
+            permit_signature = self._sign_permit(permit_data)
 
         swap = self.uniswap_service.build_swap(
             quote=quote,
@@ -226,6 +248,7 @@ class TradeService:
             "swapResponse": swap,
             "routing": routing,
         }
+    
 
     def prepare_safe_trade(self, *args, **kwargs) -> Dict[str, Any]:
         return self.prepare_vault_trade(*args, **kwargs)
@@ -240,23 +263,40 @@ class TradeService:
         slippage_bps: int = 50,
         permit_signature: Optional[str] = None,
     ) -> Dict[str, Any]:
-        _ = chain_id
         wallet_address = settings.vault_manager_address
         if not wallet_address:
             raise ValueError("VAULT_MANAGER_ADDRESS required")
-        prepared = self.prepare_vault_trade(
+
+        # Quote
+        quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
-            vault_id=vault_id,
             wallet_address=wallet_address,
             token_in=token_in,
             token_out=token_out,
             amount_in=amount_in,
             slippage_bps=slippage_bps,
-            permit_signature=permit_signature,
-            recipient=wallet_address,
         )
-        tx = prepared["swapResponse"]
-        normalized = self._normalize_swap_tx(tx)
+
+        quote = quote_response.get("quote")
+        permit_data = quote_response.get("permitData")
+        routing = str(quote_response.get("routing") or "")
+
+        if not isinstance(quote, dict):
+            raise ValueError("quote response missing quote payload")
+
+        # Auto-sign permit
+        if permit_data and not permit_signature:
+            permit_signature = self._sign_permit(permit_data)
+
+        # Build swap
+        swap = self.uniswap_service.build_swap(
+            quote=quote,
+            signature=permit_signature,
+            permit_data=permit_data if isinstance(permit_data, dict) else None,
+        )
+        normalized = self._normalize_swap_tx(swap)
+
+        # Execute via Vault (skip simulation)
         execution = self.vault_service.execute_agent_swap(
             vault_id=vault_id,
             target=normalized["to"],
@@ -264,7 +304,9 @@ class TradeService:
             min_asset_delta=0,
             value=int(normalized["value"]),
         )
+
         return {
-            "prepared": prepared,
+            "quoteResponse": quote_response,
+            "routing": routing,
             "execution": execution,
         }
