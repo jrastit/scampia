@@ -3,7 +3,7 @@
 # Ce fichier se commit dans le repo.
 # Pas de secrets ici.
 # ─────────────────────────────────────
-config:
+config_file:
   open_claw_config: "Bla bla bla, bla bla bla {api_key}"
 
 app:

@@ -233,7 +233,7 @@ class Settings:
     
     @property
     def open_claw_config(self) -> str:
-        return _get(["config", "open_claw_config"], default="")
+        return _get(["config_file", "open_claw_config"], default="")
 
 
 settings = Settings()
