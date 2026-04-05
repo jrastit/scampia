@@ -42,10 +42,16 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
 
     @router.get("/config", response_model=EnsConfigResponse)
     def get_ens_config():
+        ens_manager_address = getattr(
+            settings,
+            "ens_manager_address",
+            settings.vault_manager_address or settings.vault_address,
+        )
         return {
             "network": settings.network,
             "chainId": settings.chain_id,
-            "managerAddress": settings.vault_manager_address or settings.vault_address,
+            "managerAddress": ens_manager_address,
+            "vaultContractAddress": settings.vault_manager_address or settings.vault_address,
             "parentName": settings.ens_parent_name,
             "parentNode": ens_service.w3.to_hex(namehash(settings.ens_parent_name)),
             "registryAddress": settings.ens_registry_address,

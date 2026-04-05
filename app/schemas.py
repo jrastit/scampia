@@ -217,6 +217,7 @@ class EnsConfigResponse(BaseModel):
     network: str
     chainId: int
     managerAddress: Optional[str] = None
+    vaultContractAddress: Optional[str] = None
     parentName: str
     parentNode: str
     registryAddress: str
