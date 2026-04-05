@@ -24,6 +24,13 @@ def build_router(user_service, get_db) -> APIRouter:
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
+    @router.get("/{wallet_address}/investments")
+    def get_user_investments(wallet_address: str):
+        try:
+            return user_service.get_user_investments(wallet_address)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     @router.get("")
     def list_users(db: Session = Depends(get_db)):
         return user_service.get_all_users(db)

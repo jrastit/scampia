@@ -19,6 +19,19 @@ class UserServiceStub:
         _ = db
         return [{"wallet_address": "0x1"}, {"wallet_address": "0x2"}]
 
+    def get_user_investments(self, wallet_address: str):
+        return {
+            "wallet_address": wallet_address.lower(),
+            "items": [
+                {
+                    "vault_id": 12,
+                    "shares": "1000000000000000000",
+                    "value": "1020000000000000000",
+                    "profit": "20000000000000000",
+                }
+            ],
+        }
+
 
 def _get_db():
     yield object()
@@ -48,3 +61,12 @@ def test_list_users_ok() -> None:
     response = client.get("/v1/users")
     assert response.status_code == 200
     assert len(response.json()) == 2
+
+
+def test_get_user_investments_ok() -> None:
+    client = _client()
+    response = client.get("/v1/users/0xAbC/investments")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["wallet_address"] == "0xabc"
+    assert body["items"][0]["vault_id"] == 12

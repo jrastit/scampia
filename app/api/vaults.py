@@ -34,6 +34,20 @@ class AgentSwapRequest(BaseModel):
 def build_router(vault_service) -> APIRouter:
     router = APIRouter(prefix="/v1/vaults", tags=["vaults"])
 
+    @router.get("")
+    def list_vaults():
+        try:
+            return vault_service.list_vaults()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.get("/{vault_id}")
+    def get_vault_details(vault_id: int):
+        try:
+            return vault_service.get_vault_details(vault_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     @router.post("/import")
     def import_vault(req: ImportVaultRequest):
         try:

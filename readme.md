@@ -38,6 +38,8 @@ Base prefix: `/api`
 
 ### Vaults
 
+- `GET /v1/vaults`
+- `GET /v1/vaults/{vault_id}`
 - `POST /v1/vaults/import`
 - `GET /v1/vaults/balances`
 - `GET /v1/vaults/balance/{token_address}`
@@ -47,6 +49,73 @@ Base prefix: `/api`
 - `POST /v1/vaults/agent-swap/build`
 - `POST /v1/vaults/agent-swap/execute`
 - `GET /v1/vaults/{vault_id}/positions/{user_address}`
+
+`GET /v1/vaults` response shape:
+
+```json
+{
+	"items": [
+		{
+			"vault_id": 12,
+			"owner": "0x...",
+			"owner_fee_bps": 300,
+			"asset_token": "0x...",
+			"total_assets": "123450000000000000000",
+			"total_shares": "120000000000000000000"
+		}
+	]
+}
+```
+
+`GET /v1/vaults/{vault_id}` response shape:
+
+```json
+{
+	"vault_id": 12,
+	"owner": "0x...",
+	"owner_fee_bps": 300,
+	"manager_fee_bps": 200,
+	"asset_token": "0x...",
+	"total_assets": "123450000000000000000",
+	"total_shares": "120000000000000000000",
+	"created_at": "2026-04-05T12:00:00Z"
+}
+```
+
+### Users
+
+- `POST /v1/users/connect`
+- `GET /v1/users/{wallet_address}`
+- `GET /v1/users/{wallet_address}/investments`
+- `GET /v1/users`
+
+`GET /v1/users/{wallet_address}/investments` response shape:
+
+```json
+{
+	"wallet_address": "0x...",
+	"items": [
+		{
+			"vault_id": 12,
+			"shares": "1000000000000000000",
+			"value": "1020000000000000000",
+			"profit": "20000000000000000"
+		}
+	]
+}
+```
+
+### ENS
+
+- `GET /v1/ens/config`
+- `POST /v1/ens/config/build`
+- `POST /v1/ens/config/sync`
+- `POST /v1/ens/vaults/register/build`
+- `POST /v1/ens/vaults/register`
+- `PUT /v1/ens/vaults/policy/build`
+- `PUT /v1/ens/vaults/{vault_id}/policy`
+- `GET /v1/ens/vaults/{vault_id}`
+- `GET /v1/ens/names/{name}`
 
 ### Trades
 
@@ -119,6 +188,13 @@ Important vault variables:
 - `VAULT_ASSET_TOKEN`
 - `VAULT_MANAGER_FEE_BPS`
 
+Important ENS variables for write endpoints:
+
+- `ENS_REGISTRY_ADDRESS`
+- `ENS_PUBLIC_RESOLVER_ADDRESS`
+- `ENS_PARENT_NAME`
+- `BACKEND_PRIVATE_KEY` or `ENS_PRIVATE_KEY` (required for `/v1/ens/*` write operations)
+
 ## Tests
 
 ### Solidity tests (Foundry)
@@ -142,7 +218,7 @@ forge test
 ./.venv/bin/python -m pytest -q tests
 ```
 
-Current automated API suite covers health, vault routes, trades routes, and users routes.
+Current automated API suite covers health, vault routes, trades routes, users routes, and ENS routes.
 
 ## Notes
 

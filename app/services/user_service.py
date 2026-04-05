@@ -70,3 +70,33 @@ class UserService:
             }
             for u in users
         ]
+
+    def get_user_investments(self, wallet_address: str) -> Dict[str, Any]:
+        normalized_wallet = wallet_address.lower()
+        vaults_payload = self.vault_service.list_vaults()
+        items: list[Dict[str, Any]] = []
+
+        for vault in vaults_payload.get("items", []):
+            vault_id = int(vault["vault_id"])
+            position = self.vault_service.get_user_position(vault_id, normalized_wallet)
+            shares = int(position["shares"])
+            if shares <= 0:
+                continue
+
+            value = int(position["estimatedAssets"])
+            principal = int(position["principal"])
+            profit = value - principal
+
+            items.append(
+                {
+                    "vault_id": vault_id,
+                    "shares": str(shares),
+                    "value": str(value),
+                    "profit": str(profit),
+                }
+            )
+
+        return {
+            "wallet_address": normalized_wallet,
+            "items": items,
+        }
