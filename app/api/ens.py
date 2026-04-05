@@ -29,11 +29,17 @@ except ImportError:
 PROFILE_TEXT_KEYS = [
     "stop_loss_pct",
     "take_profit_pct",
-    "max_open_positions",
+    # "max_open_positions",
     "min_eth_balance",
     "max_slippage_tolerance_pct",
     "max_gas_price_gwei",
     "authorized_tokens",
+    # et côté agent:
+    "bot_name",
+    "owner_id",
+    "benefits",
+    "trades_count",
+    "successful_trades"
 ]
 
 
@@ -60,22 +66,24 @@ def build_router(ens_service, _vault_service, settings) -> APIRouter:
 
     @router.post("/config/build", response_model=EnsWriteResponse)
     def build_ens_config_tx(req: SetEnsConfigRequest):
+        parent_name = settings.parent_name
         try:
             return ens_service.build_set_config_tx(
                 registry_address=req.registry_address,
                 resolver_address=req.resolver_address,
-                parent_name=req.parent_name,
+                parent_name=parent_name,
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/config/sync", response_model=EnsWriteResponse)
     def sync_ens_config(req: SetEnsConfigRequest):
+        parent_name = settings.parent_name
         try:
             return ens_service.set_config(
                 registry_address=req.registry_address,
                 resolver_address=req.resolver_address,
-                parent_name=req.parent_name,
+                parent_name=parent_name,
             )
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status, Depends
+
+from app.data import user_data
 
 try:
     from app.schemas import BuildTradeRequest, TradeResponse, UniswapQuoteRequest
@@ -9,6 +11,9 @@ except ImportError:
     from policy_service import PolicyViolation
     from simulation_service import SimulationError
 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer()
 
 def build_router(trade_service, settings) -> APIRouter:
     router = APIRouter(prefix="/v1/trades", tags=["trades"])
@@ -50,8 +55,15 @@ def build_router(trade_service, settings) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @router.post("/prepare-vault-tx", response_model=TradeResponse)
-    def prepare_vault_trade(req: BuildTradeRequest):
+    @router.post("/prepare-safe-tx", response_model=TradeResponse)
+    def prepare_vault_trade(req: BuildTradeRequest, credentials: HTTPAuthorizationCredentials = Depends(security)):
+        api_key = credentials.credentials
+        user = user_data.get_user_by_api_key(api_key)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key"
+            )
         try:
             wallet_address = req.resolve_wallet_address()
             vault_id = req.require_vault_id()
@@ -77,7 +89,7 @@ def build_router(trade_service, settings) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.post("/prepare-safe-tx", response_model=TradeResponse)
-    def prepare_safe_trade_compat(req: BuildTradeRequest):
+    def prepare_vault_trade_compat(req: BuildTradeRequest):
         return prepare_vault_trade(req)
 
     @router.post("/execute-vault-swap", response_model=TradeResponse)
@@ -92,6 +104,7 @@ def build_router(trade_service, settings) -> APIRouter:
                 amount_in=req.amount_in,
                 slippage_bps=req.slippage_bps,
                 permit_signature=req.permit_signature,
+                user_id = user.id
             )
         except PolicyViolation as e:
             raise HTTPException(status_code=403, detail=str(e))

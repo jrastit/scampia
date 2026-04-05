@@ -1,7 +1,6 @@
 from typing import Any, Dict, Iterable, Optional
-
+from app.data import user_data
 from web3 import Web3
-
 try:
     from app.config import settings
     from app.services.policy_service import PolicyService
@@ -168,19 +167,28 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or wallet_address
-        allow_native_tokens = self._allow_native_tokens()
-        self.policy_service.validate_trade(
-            vault_address=wallet_address,
-            recipient=recipient,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=int(amount_in),
-            allowed_tokens_in=allowed_tokens_in or [],
-            allowed_tokens_out=allowed_tokens_out or [],
-            max_input_per_tx=max_input_per_tx,
-            allow_native_tokens=allow_native_tokens,
-        )
+        if self.policy_service.validate_parameters():
+            self.policy_service.validate_trade(
+                safe_address=wallet_address,
+                recipient=recipient,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=int(amount_in),
+                allowed_tokens_in=allowed_tokens_in or [],
+                allowed_tokens_out=allowed_tokens_out or [],
+                max_input_per_tx=max_input_per_tx,
+                allow_native_tokens = self._allow_native_tokens()
+            )
 
+            swap = self.uniswap_service.build_swap(
+                chain_id=chain_id,
+                wallet_address=wallet_address,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=amount_in,
+                slippage_bps=slippage_bps,
+            )
+            tx = self._normalize_swap_tx(swap)
         quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,
             wallet_address=wallet_address,
@@ -223,12 +231,10 @@ class TradeService:
         tx = self._normalize_swap_tx(swap)
 
         return {
-            "policyCheck": {"ok": True},
-            "quoteResponse": quote_response,
-            "swapResponse": swap,
-            "routing": routing,
-            "tx": tx,
-        }
+                "policyCheck": {"ok": True},
+                "quoteOrSwapResponse": swap,
+                "tx": tx,
+            }
 
     def prepare_vault_trade(
         self,
@@ -238,6 +244,7 @@ class TradeService:
         token_in: str,
         token_out: str,
         amount_in: str,
+        user_id: int,
         slippage_bps: int = 50,
         permit_signature: Optional[str] = None,
         recipient: Optional[str] = None,
@@ -246,18 +253,18 @@ class TradeService:
         max_input_per_tx: int = 0,
     ) -> Dict[str, Any]:
         recipient = recipient or wallet_address
-        allow_native_tokens = self._allow_native_tokens()
-        self.policy_service.validate_trade(
-            vault_address=wallet_address,
-            recipient=recipient,
-            token_in=token_in,
-            token_out=token_out,
-            amount_in=int(amount_in),
-            allowed_tokens_in=allowed_tokens_in or [],
-            allowed_tokens_out=allowed_tokens_out or [],
-            max_input_per_tx=max_input_per_tx,
-            allow_native_tokens=allow_native_tokens,
-        )
+        if self.policy_service.validate_parameters(amount_in,token_in,token_out):
+            self.policy_service.validate_trade(
+                safe_address=wallet_address,
+                recipient=recipient,
+                token_in=token_in,
+                token_out=token_out,
+                amount_in=int(amount_in),
+                allowed_tokens_in=allowed_tokens_in or [],
+                allowed_tokens_out=allowed_tokens_out or [],
+                max_input_per_tx=max_input_per_tx,
+                allow_native_tokens = self._allow_native_tokens()
+            )
 
         quote_response = self.uniswap_service.get_quote(
             chain_id=chain_id,

@@ -194,6 +194,42 @@ class Settings:
     @property
     def trade_max_input_per_tx(self) -> int:
         return self.default_max_input_per_tx
+    
+    @property
+    def stop_loss_pct(self) -> int:
+        return _get(["policy", "stop_loss_pct"], default=0)
+
+    @property
+    def take_profit_pct(self) -> int:
+        return _get(["policy", "take_profit_pct"], default=0)
+
+    @property
+    def max_open_positions(self) -> int:
+        return _get(["policy", "max_open_positions"], default=0)
+
+    @property
+    def min_eth_balance(self) -> float:
+        return _get(["policy", "min_eth_balance"], default=0.0)
+
+    @property
+    def max_slippage_tolerance_pct(self) -> int:
+        return _get(["policy", "max_slippage_tolerance_pct"], default=0)
+
+    @property
+    def max_gas_price_gwei(self) -> int:
+        return _get(["policy", "max_gas_price_gwei"], default=0)
+
+    @property
+    def authorized_tokens(self) -> list[str]:
+        return _get(["policy", "authorized_tokens"], default=[])
+    
+    @property
+    def open_claw_config(self) -> str:
+        return _get(["config_file", "open_claw_config"], default="")
+    
+    @property
+    def parent_name(self) -> str:
+        return _get(["ens", "parent_name"], default="")
 
 
 settings = Settings()

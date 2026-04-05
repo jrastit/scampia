@@ -94,7 +94,7 @@ def test_set_vault_policy_ok() -> None:
 
     response = client.put(
         "/v1/ens/vaults/12/policy",
-        json={"stop_loss_pct": 5.0, "max_open_positions": 3},
+        json={"stop_loss_pct": 5.0},
     )
 
     assert response.status_code == 200
@@ -103,7 +103,7 @@ def test_set_vault_policy_ok() -> None:
     _, vault_id, texts = calls[0]
     assert vault_id == 12
     assert texts["stop_loss_pct"] == "5"
-    assert texts["max_open_positions"] == "3"
+    # assert texts["max_open_positions"] == "3"
 
 
 def test_build_ens_config_tx_ok() -> None:

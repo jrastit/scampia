@@ -2,11 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.data import user_data
+
+from app.config import settings
+
 from app.schemas import ConnectWalletResponse, UserInvestmentsResponse, UserResponse, UserVaultSyncResponse
 
 
 class ConnectWalletRequest(BaseModel):
     wallet_address: str
+    
+class WalletSignature(BaseModel):
+    wallet_address: str
+    api_key_signed: str
 
 
 def build_router(user_service, get_db) -> APIRouter:
@@ -43,5 +51,13 @@ def build_router(user_service, get_db) -> APIRouter:
     @router.get("", response_model=list[UserResponse])
     def list_users(db: Session = Depends(get_db)):
         return user_service.get_all_users(db)
+    
+    @router.post("/config")
+    def get_config_file(req: WalletSignature, db: Session = Depends(get_db)):
+        # rajouter verif si api key est signé par wallet_address, alors continuer
+        user = user_data.get_user_by_wallet(db, req.wallet_address)
+        api_key = user.api_key
+        config = settings.open_claw_config.format(api_key=api_key)
+        return {"config":config}
 
     return router

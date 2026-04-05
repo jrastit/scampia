@@ -19,7 +19,6 @@ class ImportSafeRequest(BaseModel):
 class VaultEnsPolicyUpdateRequest(BaseModel):
     stop_loss_pct: Optional[float] = None
     take_profit_pct: Optional[float] = None
-    max_open_positions: Optional[int] = None
     min_eth_balance: Optional[float] = None
     max_slippage_tolerance_pct: Optional[float] = None
     max_gas_price_gwei: Optional[float] = None
@@ -29,20 +28,34 @@ class VaultEnsPolicyUpdateRequest(BaseModel):
         records: Dict[str, str] = {}
         if self.stop_loss_pct is not None:
             records["stop_loss_pct"] = self._format_number(self.stop_loss_pct)
+        else:
+            records["stop_loss_pct"] = settings.stop_loss_pct
         if self.take_profit_pct is not None:
             records["take_profit_pct"] = self._format_number(self.take_profit_pct)
-        if self.max_open_positions is not None:
-            records["max_open_positions"] = str(self.max_open_positions)
+        else:
+            records["take_profit_pct"] = settings.take_profit_pct
+        # if self.max_open_positions is not None:
+        #     records["max_open_positions"] = str(self.max_open_positions)
+        # else:
+        #     records["max_open_positions"] = settings.max_open_positions
         if self.min_eth_balance is not None:
             records["min_eth_balance"] = self._format_number(self.min_eth_balance)
+        else:
+            records["min_eth_balance"] = settings.min_eth_balance
         if self.max_slippage_tolerance_pct is not None:
             records["max_slippage_tolerance_pct"] = self._format_number(
                 self.max_slippage_tolerance_pct
             )
+        else:
+            records["max_slippage_tolerance_pct"] = settings.max_slippage_tolerance_pct
         if self.max_gas_price_gwei is not None:
             records["max_gas_price_gwei"] = self._format_number(self.max_gas_price_gwei)
+        else:
+            records["max_gas_price_gwei"] = settings.max_gas_price_gwei
         if self.authorized_tokens is not None:
             records["authorized_tokens"] = json.dumps(self.authorized_tokens, separators=(",", ":"))
+        else:
+            records["authorized_tokens"] = json.dumps(settings.authorized_tokens)
         return records
 
     @staticmethod
@@ -64,7 +77,6 @@ class BuildVaultEnsPolicyTxRequest(VaultEnsPolicyUpdateRequest):
 class SetEnsConfigRequest(BaseModel):
     registry_address: Optional[str] = None
     resolver_address: Optional[str] = None
-    parent_name: Optional[str] = None
 
 
 class UniswapQuoteRequest(BaseModel):
