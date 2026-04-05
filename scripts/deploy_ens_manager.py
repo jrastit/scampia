@@ -5,6 +5,11 @@ from pathlib import Path
 from eth_account import Account
 from web3 import Web3
 
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
+
 ROOT = Path(__file__).resolve().parent.parent
 ABI_FILE = ROOT / "contracts" / "artifacts" / "ScampiaENSManager.abi.json"
 BYTECODE_FILE = ROOT / "contracts" / "artifacts" / "ScampiaENSManager.bytecode.txt"
@@ -22,9 +27,9 @@ def load_artifact() -> tuple[list[dict], str]:
 
 
 def main() -> None:
-    rpc_url = os.getenv("RPC_URL", "").strip()
+    rpc_url = settings.rpc_url
     private_key = os.getenv("BACKEND_PRIVATE_KEY", "").strip()
-    vault_contract = os.getenv("VAULT_MANAGER_ADDRESS", "").strip() or os.getenv("VAULT_ADDRESS", "").strip()
+    vault_contract = settings.vault_manager_address or settings.vault_address
 
     if not rpc_url:
         raise ValueError("RPC_URL is required")
